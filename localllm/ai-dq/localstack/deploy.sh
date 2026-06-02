@@ -100,7 +100,15 @@ echo "[3/5] Zipping..."
 echo "[4/5] Creating/updating Lambda function '${FUNCTION_NAME}' (timeout=${LAMBDA_TIMEOUT}s)..."
 echo "      APP_NAME='${APP_NAME}' APP_PARAM_FILE='${APP_PARAM_FILE}'"
 echo "      KNOWLEDGE_BASE_ID='${KNOWLEDGE_BASE_ID}' KB_NUM_RESULTS='${KB_NUM_RESULTS}'"
-ENV_VARS="Variables={USE_LOCAL_LLM=true,LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL},LMSTUDIO_API_KEY=${LMSTUDIO_API_KEY},LMSTUDIO_CHAT_MODEL=${LMSTUDIO_CHAT_MODEL},LMSTUDIO_EMBEDDING_MODEL=${LMSTUDIO_EMBEDDING_MODEL},KNOWLEDGE_BASE_ID=${KNOWLEDGE_BASE_ID},KB_NUM_RESULTS=${KB_NUM_RESULTS},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},LOG_LEVEL=${LOG_LEVEL},APP_NAME=${APP_NAME},APP_PARAM_FILE=${APP_PARAM_FILE}}"
+
+# --environment は JSON 形式で渡す。
+#  ショートハンド(Variables={k=v,...})だと、末尾やいずれかの値が空のとき
+#  (例: APP_PARAM_FILE= や LMSTUDIO_CHAT_MODEL=)に AWS CLI のパーサが
+#  「Expected ',', received 'EOF'」で失敗する。JSON なら空文字列も安全に扱える。
+ENV_JSON=$(cat <<EOF
+{"Variables":{"USE_LOCAL_LLM":"true","LMSTUDIO_BASE_URL":"${LMSTUDIO_BASE_URL}","LMSTUDIO_API_KEY":"${LMSTUDIO_API_KEY}","LMSTUDIO_CHAT_MODEL":"${LMSTUDIO_CHAT_MODEL}","LMSTUDIO_EMBEDDING_MODEL":"${LMSTUDIO_EMBEDDING_MODEL}","KNOWLEDGE_BASE_ID":"${KNOWLEDGE_BASE_ID}","KB_NUM_RESULTS":"${KB_NUM_RESULTS}","AWS_ACCOUNT_ID":"${AWS_ACCOUNT_ID}","LOG_LEVEL":"${LOG_LEVEL}","APP_NAME":"${APP_NAME}","APP_PARAM_FILE":"${APP_PARAM_FILE}"}}
+EOF
+)
 
 if ${AWS} lambda get-function --function-name "${FUNCTION_NAME}" >/dev/null 2>&1; then
   ${AWS} lambda update-function-code \
@@ -112,7 +120,7 @@ if ${AWS} lambda get-function --function-name "${FUNCTION_NAME}" >/dev/null 2>&1
     --function-name "${FUNCTION_NAME}" \
     --timeout "${LAMBDA_TIMEOUT}" \
     --memory-size "${LAMBDA_MEMORY}" \
-    --environment "${ENV_VARS}" >/dev/null
+    --environment "${ENV_JSON}" >/dev/null
 else
   ${AWS} lambda create-function \
     --function-name "${FUNCTION_NAME}" \
@@ -121,7 +129,7 @@ else
     --timeout "${LAMBDA_TIMEOUT}" \
     --memory-size "${LAMBDA_MEMORY}" \
     --role arn:aws:iam::000000000000:role/lambda-role \
-    --environment "${ENV_VARS}" \
+    --environment "${ENV_JSON}" \
     --zip-file "fileb://${ZIP_FILE}" >/dev/null
 fi
 
