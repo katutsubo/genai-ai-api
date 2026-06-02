@@ -1,0 +1,25 @@
+# ai-dq アプリ個別設定
+#
+# config/defaults/*.toml を上書きする(記述した項目のみ)。
+# 未記述の項目は defaults の値が使われる。
+# deploy.sh 実行時に APP_PARAM_FILE=aidq.toml APP_NAME=aidq を渡すと読み込まれる。
+
+name = "aidq"
+description = "AI-DQ アプリ（ローカル）"
+
+# 回答末尾に付与するフッター(APP_NAME 指定時に app.py の get_response_footer が読む)
+responseFooter = "※ この回答は AI-DQ により生成されています。"
+
+# --- 回答生成の挙動を上書き ---
+[answer_generation]
+systemPrompt = '''
+あなたは AI-DQ 専用のアシスタントです。
+提供されたコンテキスト（検索結果）のみを根拠に、簡潔かつ正確に日本語で回答してください。
+コンテキストに根拠がない場合は、推測せず「提供された情報では回答できません」と述べてください。
+'''
+temperature = 0
+maxTokens = 1024
+
+# --- クエリ拡張の挙動を上書き ---
+[query_expansion]
+temperature = 0
