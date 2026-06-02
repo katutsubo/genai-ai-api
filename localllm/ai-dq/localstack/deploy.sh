@@ -23,10 +23,14 @@
 
 set -euo pipefail
 
-AWS_ENDPOINT_URL=http://localhost:4566 \
-FUNCTION_NAME=aidq-local \
-LMSTUDIO_BASE_URL=http://host.docker.internal:1234/v1 \
-LMSTUDIO_API_KEY=lm-studio \
+AWS_ENDPOINT_URL=http://localhost:4566 
+FUNCTION_NAME=aidq-local 
+APP_NAME=aidq
+APP_PARAM_FILE=aidq.toml 
+LMSTUDIO_BASE_URL=http://host.docker.internal:1234/v1 
+LMSTUDIO_API_KEY=lm-studio 
+LMSTUDIO_CHAT_MODEL="" 
+LMSTUDIO_EMBEDDING_MODEL="" 
 
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
