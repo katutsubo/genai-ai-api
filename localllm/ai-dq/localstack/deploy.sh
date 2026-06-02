@@ -23,12 +23,6 @@
 
 set -euo pipefail
 
-AWS_ENDPOINT_URL=http://localhost:4566 \
-FUNCTION_NAME=aidq-local \
-LMSTUDIO_BASE_URL=http://host.docker.internal:1234/v1 \
-LMSTUDIO_API_KEY=lm-studio \
-
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAMBDA_SRC="$(cd "${SCRIPT_DIR}/../lib/constructs/rag-lambda/invokeModel" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/.build"
@@ -39,7 +33,7 @@ AWS_REGION_LOCAL="${AWS_REGION_LOCAL:-ap-northeast-1}"
 LAMBDA_TIMEOUT="${LAMBDA_TIMEOUT:-900}"
 LAMBDA_MEMORY="${LAMBDA_MEMORY:-512}"
 
-# LocalStack エンドポイ��ト: AWS_ENDPOINT_URL > LOCALSTACK_ENDPOINT > localhost:4566
+# LocalStack エンドポイント: AWS_ENDPOINT_URL > LOCALSTACK_ENDPOINT > localhost:4566
 ENDPOINT="${AWS_ENDPOINT_URL:-${LOCALSTACK_ENDPOINT:-http://localhost:4566}}"
 
 # LMStudio / LiteLLM 接続先 (Lambda コンテナ内から見たホスト名)
@@ -49,6 +43,13 @@ LMSTUDIO_BASE_URL="${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}"
 LMSTUDIO_API_KEY="${LMSTUDIO_API_KEY:-lm-studio}"
 LMSTUDIO_CHAT_MODEL="${LMSTUDIO_CHAT_MODEL:-}"
 LMSTUDIO_EMBEDDING_MODEL="${LMSTUDIO_EMBEDDING_MODEL:-}"
+
+# Knowledge Base 関連 (core/kb_retrieve_and_rating.py が import 時に参照するため必須)
+#  ローカルではダミー値でよい(USE_LOCAL_LLM=true 時はローカルKBに分岐)。
+KNOWLEDGE_BASE_ID="${KNOWLEDGE_BASE_ID:-local-dummy-kb}"
+KB_NUM_RESULTS="${KB_NUM_RESULTS:-5}"
+AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-000000000000}"
+LOG_LEVEL="${LOG_LEVEL:-DEBUG}"
 
 # アプリ設定 (config/apps/<APP_PARAM_FILE> を読み込ませる)
 #  - APP_PARAM_FILE: 読み込むアプリ個別設定ファイル名 (例: aidq.toml)
@@ -93,7 +94,8 @@ echo "[3/5] Zipping..."
 
 echo "[4/5] Creating/updating Lambda function '${FUNCTION_NAME}' (timeout=${LAMBDA_TIMEOUT}s)..."
 echo "      APP_NAME='${APP_NAME}' APP_PARAM_FILE='${APP_PARAM_FILE}'"
-ENV_VARS="Variables={USE_LOCAL_LLM=true,LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL},LMSTUDIO_API_KEY=${LMSTUDIO_API_KEY},LMSTUDIO_CHAT_MODEL=${LMSTUDIO_CHAT_MODEL},LMSTUDIO_EMBEDDING_MODEL=${LMSTUDIO_EMBEDDING_MODEL},APP_NAME=${APP_NAME},APP_PARAM_FILE=${APP_PARAM_FILE}}"
+echo "      KNOWLEDGE_BASE_ID='${KNOWLEDGE_BASE_ID}' KB_NUM_RESULTS='${KB_NUM_RESULTS}'"
+ENV_VARS="Variables={USE_LOCAL_LLM=true,LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL},LMSTUDIO_API_KEY=${LMSTUDIO_API_KEY},LMSTUDIO_CHAT_MODEL=${LMSTUDIO_CHAT_MODEL},LMSTUDIO_EMBEDDING_MODEL=${LMSTUDIO_EMBEDDING_MODEL},KNOWLEDGE_BASE_ID=${KNOWLEDGE_BASE_ID},KB_NUM_RESULTS=${KB_NUM_RESULTS},AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID},LOG_LEVEL=${LOG_LEVEL},APP_NAME=${APP_NAME},APP_PARAM_FILE=${APP_PARAM_FILE}}"
 
 if ${AWS} lambda get-function --function-name "${FUNCTION_NAME}" >/dev/null 2>&1; then
   ${AWS} lambda update-function-code \
