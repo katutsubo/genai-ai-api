@@ -1,9 +1,20 @@
 name = "aidq"
 description = "AI-DQ アプリ（ローカル）"
 
+
+# 回答末尾フッター(APP_NAME 指定時に読まれる)
+responseFooter = "※ この回答は AIDQアプリ により生成されています。"
+
+# 回答生成の挙動を上書き
 [answer_generation]
-# 必要なら systemPrompt や temperature を上書き
 systemPrompt = '''
-あなたは AI-DQ 用のアシスタントです。提供された情報を元に簡潔に回答してください。
+あなたは AIによるデータ品質 専用のアシスタントです。
+提供されたコンテキストのみを根拠に、簡潔かつ正確に日本語で回答してください。
 '''
 temperature = 0
+maxTokens = 1024
+
+# クエリ拡張の挙動を上書き(任意)
+[query_expansion]
+temperature = 0
+

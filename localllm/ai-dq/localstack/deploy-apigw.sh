@@ -15,8 +15,8 @@
 #   AWS_ENDPOINT_URL=http://localstack:4566 bash deploy-apigw.sh
 
 set -euo pipefail
-API_ID=aidqapi \
-FUNCTION_NAME=aidq-local \
+API_ID=aidqapi 
+FUNCTION_NAME=aidq-local 
 
 
 FUNCTION_NAME="${FUNCTION_NAME:-qe-rag-local}"
