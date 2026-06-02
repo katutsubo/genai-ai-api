@@ -16,20 +16,17 @@
 #   config/defaults/*.toml を上書きする(プロンプト・モデル・推論パラメータ等)。
 #   例: FUNCTION_NAME=aidq-local APP_NAME=aidq APP_PARAM_FILE=aidq.toml ./deploy.sh
 #
+# ※ 注意: 本スクリプトは FUNCTION_NAME / APP_NAME / APP_PARAM_FILE 等を
+#   「環境変数」で受け取る設計です。スクリプト内に値をハードコードしないこと。
+#   ハードコードすると redeploy-all.sh など外部から渡した値が無視され、
+#   常に同じアプリ(例: aidq)だけがデプロイされる不具合になります。
+#
 # 前提:
 #   - docker / docker compose
 #   - awslocal (pip install awscli-local) または aws --endpoint-url=http://localhost:4566
 #   - python3, pip, zip
 
 set -euo pipefail
-
-AWS_ENDPOINT_URL=http://localhost:4566 
-FUNCTION_NAME=aidq-local 
-APP_NAME=aidq 
-APP_PARAM_FILE=aidq.toml 
-LMSTUDIO_BASE_URL=http://host.docker.internal:1234/v1 
-LMSTUDIO_API_KEY=lm-studio 
-
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAMBDA_SRC="$(cd "${SCRIPT_DIR}/../lib/constructs/rag-lambda/invokeModel" && pwd)"
