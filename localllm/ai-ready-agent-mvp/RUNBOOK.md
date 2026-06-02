@@ -35,7 +35,7 @@ python3 --version && pip --version && zip --version
 git clone https://github.com/katutsubo/genai-ai-api.git
 cd genai-ai-api
 git checkout localstack-lmstudio
-cd aws/query-expansion-rag/localstack
+cd localllm/ai-ready-agent-mvp/localstack
 ```
 
 ## 3. LocalStack 起動 → Lambda デプロイ → 実行
