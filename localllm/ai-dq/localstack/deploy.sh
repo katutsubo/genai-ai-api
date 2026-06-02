@@ -11,6 +11,11 @@
 #       例: LMSTUDIO_BASE_URL=http://litellm:4000/v1 LMSTUDIO_API_KEY=sk-localdummy \
 #            LMSTUDIO_CHAT_MODEL=chat LMSTUDIO_EMBEDDING_MODEL=embed ./deploy.sh
 #
+# アプリ設定の切り替え:
+#   APP_PARAM_FILE / APP_NAME を渡すと、config/apps/<APP_PARAM_FILE> を読み込み、
+#   config/defaults/*.toml を上書きする(プロンプト・モデル・推論パラメータ等)。
+#   例: FUNCTION_NAME=aidq-local APP_NAME=aidq APP_PARAM_FILE=aidq.toml ./deploy.sh
+#
 # 前提:
 #   - docker / docker compose
 #   - awslocal (pip install awscli-local) または aws --endpoint-url=http://localhost:4566
@@ -28,7 +33,7 @@ AWS_REGION_LOCAL="${AWS_REGION_LOCAL:-ap-northeast-1}"
 LAMBDA_TIMEOUT="${LAMBDA_TIMEOUT:-900}"
 LAMBDA_MEMORY="${LAMBDA_MEMORY:-512}"
 
-# LocalStack エンドポイント: AWS_ENDPOINT_URL > LOCALSTACK_ENDPOINT > localhost:4566
+# LocalStack エンドポイ��ト: AWS_ENDPOINT_URL > LOCALSTACK_ENDPOINT > localhost:4566
 ENDPOINT="${AWS_ENDPOINT_URL:-${LOCALSTACK_ENDPOINT:-http://localhost:4566}}"
 
 # LMStudio / LiteLLM 接続先 (Lambda コンテナ内から見たホスト名)
@@ -38,6 +43,13 @@ LMSTUDIO_BASE_URL="${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}"
 LMSTUDIO_API_KEY="${LMSTUDIO_API_KEY:-lm-studio}"
 LMSTUDIO_CHAT_MODEL="${LMSTUDIO_CHAT_MODEL:-}"
 LMSTUDIO_EMBEDDING_MODEL="${LMSTUDIO_EMBEDDING_MODEL:-}"
+
+# アプリ設定 (config/apps/<APP_PARAM_FILE> を読み込ませる)
+#  - APP_PARAM_FILE: 読み込むアプリ個別設定ファイル名 (例: aidq.toml)
+#  - APP_NAME      : レスポンスフッター取得等で使うアプリ名 (例: aidq)
+#  未指定の場合は config/defaults のみが使われる(従来動作)。
+APP_NAME="${APP_NAME:-}"
+APP_PARAM_FILE="${APP_PARAM_FILE:-}"
 
 # AWS CLI の選択:
 #  - AWS_ENDPOINT_URL が明示されていればそれを使う (コンテナ内 genai-net 等)
@@ -74,7 +86,8 @@ echo "[3/5] Zipping..."
 (cd "${BUILD_DIR}" && zip -qr "${ZIP_FILE}" .)
 
 echo "[4/5] Creating/updating Lambda function '${FUNCTION_NAME}' (timeout=${LAMBDA_TIMEOUT}s)..."
-ENV_VARS="Variables={USE_LOCAL_LLM=true,LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL},LMSTUDIO_API_KEY=${LMSTUDIO_API_KEY},LMSTUDIO_CHAT_MODEL=${LMSTUDIO_CHAT_MODEL},LMSTUDIO_EMBEDDING_MODEL=${LMSTUDIO_EMBEDDING_MODEL},KNOWLEDGE_BASE_ID=local-dummy-kb,KB_NUM_RESULTS=5,APP_NAME=qe-rag-local,APP_PARAM_FILE=,LOG_LEVEL=DEBUG,AWS_ACCOUNT_ID=000000000000}"
+echo "      APP_NAME='${APP_NAME}' APP_PARAM_FILE='${APP_PARAM_FILE}'"
+ENV_VARS="Variables={USE_LOCAL_LLM=true,LMSTUDIO_BASE_URL=${LMSTUDIO_BASE_URL},LMSTUDIO_API_KEY=${LMSTUDIO_API_KEY},LMSTUDIO_CHAT_MODEL=${LMSTUDIO_CHAT_MODEL},LMSTUDIO_EMBEDDING_MODEL=${LMSTUDIO_EMBEDDING_MODEL},APP_NAME=${APP_NAME},APP_PARAM_FILE=${APP_PARAM_FILE}}"
 
 if ${AWS} lambda get-function --function-name "${FUNCTION_NAME}" >/dev/null 2>&1; then
   ${AWS} lambda update-function-code \
@@ -107,4 +120,5 @@ ${AWS} lambda wait function-active-v2 --function-name "${FUNCTION_NAME}" 2>/dev/
 echo "Done. Deployed Lambda: ${FUNCTION_NAME}"
 echo "  Endpoint     : ${ENDPOINT}"
 echo "  LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL}"
+echo "  APP_NAME / APP_PARAM_FILE: ${APP_NAME} / ${APP_PARAM_FILE}"
 echo "Try: ./invoke.sh"
