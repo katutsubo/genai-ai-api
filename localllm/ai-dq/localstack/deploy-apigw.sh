@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# qe-rag-local Lambda を REST API (proxy統合) として HTTP 公開するスクリプト。
+# qe-rag-local / aidq-local など Lambda を REST API (proxy統合) として HTTP 公開する。
 # genai-web などの HTTP クライアントから叩けるようにする。
 #
 # LocalStack の custom id 機能 (_custom_id_ タグ) で安定した API ID を付与するため、
@@ -10,14 +10,16 @@
 #   http://localhost:4566/restapis/<API_ID>/<STAGE>/_user_request_/
 #
 # 使い方 (deploy.sh の後に実行):
-#   bash deploy-apigw.sh
+#   API_ID=qeragapi FUNCTION_NAME=qe-rag-local bash deploy-apigw.sh
 #   # genai-net 内コンテナから実行する場合:
-#   AWS_ENDPOINT_URL=http://localstack:4566 bash deploy-apigw.sh
+#   AWS_ENDPOINT_URL=http://localstack:4566 API_ID=qeragapi FUNCTION_NAME=qe-rag-local bash deploy-apigw.sh
+#
+# ※ 注意: 本スクリプトは API_ID / FUNCTION_NAME を「環境変数」で受け取る設計です。
+#   スクリプト内に値をハードコードしないこと。ハードコードすると redeploy-all.sh
+#   など外部から渡した値が無視され、常に同じ API(例: aidqapi)だけが作られる
+#   不具合になります。
 
 set -euo pipefail
-API_ID=aidqapi 
-FUNCTION_NAME=aidq-local 
-
 
 FUNCTION_NAME="${FUNCTION_NAME:-qe-rag-local}"
 ENDPOINT="${AWS_ENDPOINT_URL:-${LOCALSTACK_ENDPOINT:-http://localhost:4566}}"
@@ -42,8 +44,8 @@ if [ -n "${EXIST}" ] && [ "${EXIST}" != "None" ]; then
   ${AWS} apigateway delete-rest-api --rest-api-id "${API_ID}" || true
 fi
 
-echo "[2/5] Creating REST API with custom id '${API_ID}'..."
-${AWS} apigateway create-rest-api --name qe-rag --tags "_custom_id_=${API_ID}" >/dev/null
+echo "[2/5] Creating REST API '${API_ID}' with custom id..."
+${AWS} apigateway create-rest-api --name "${API_ID}" --tags "_custom_id_=${API_ID}" >/dev/null
 ROOT_ID=$(${AWS} apigateway get-resources --rest-api-id "${API_ID}" --query 'items[0].id' --output text)
 
 echo "[3/5] Creating {proxy+} resource and ANY methods..."
