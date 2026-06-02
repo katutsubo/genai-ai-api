@@ -1,0 +1,27 @@
+version: "3.8"
+
+# LocalStack を起動し、Lambda を直接デプロイして awslocal lambda invoke で
+# 叩ける最小構成。API Gateway / WAF / KMS / OpenSearch は使わない。
+#
+# Lambda コンテナからホストの LMStudio (OpenAI互換サーバー) に
+# host.docker.internal で到達できるように extra_hosts を設定している。
+
+services:
+  localstack:
+    container_name: qe-rag-localstack
+    image: localstack/localstack:3
+    ports:
+      - "4566:4566"
+    environment:
+      # LocalStack で有効化するサービス (最小限)
+      - SERVICES=lambda,iam,logs,s3,sts
+      - DEBUG=1
+      # Lambda を docker ランタイムで実行
+      - LAMBDA_RUNTIME_EXECUTOR=docker
+      # Lambda コンテナも host.docker.internal を使えるようにする
+      - LAMBDA_DOCKER_FLAGS=--add-host=host.docker.internal:host-gateway
+    volumes:
+      - "./volume:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

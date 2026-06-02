@@ -1,0 +1,64 @@
+# ------------------------------------------------------------
+# genai-local 統合用: query-expansion-rag の Lambda を
+# 既存の docker-compose.yaml (genai-net) の LocalStack にデプロイする
+# one-shot サービス。Bedrock 呼び出しは LiteLLM (litellm:4000) 経由で
+# LM Studio に振り向ける。
+#
+# 使い方 (メインの docker-compose.yaml と並べて読み込む):
+#   # genai-ai-api リポジトリのパスを指定 (例: ~/src/genai-ai-api)
+#   export QE_RAG_REPO=/path/to/genai-ai-api
+#   docker compose \
+#     -f docker-compose.yaml \
+#     -f "${QE_RAG_REPO}/aws/query-expansion-rag/localstack/genai-local.deploy.compose.yaml" \
+#     --profile qe-rag up qe-rag-deploy
+#
+# デプロイ後はホストから invoke できる:
+#   cd "${QE_RAG_REPO}/aws/query-expansion-rag/localstack" && ./invoke.sh
+# ------------------------------------------------------------
+
+name: genai-local
+
+services:
+  qe-rag-deploy:
+    image: python:3.12-bookworm
+    container_name: qe-rag-deploy
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: ap-northeast-1
+      AWS_REGION: ap-northeast-1
+      # genai-net 内から LocalStack へ
+      AWS_ENDPOINT_URL: http://localstack:4566
+      FUNCTION_NAME: qe-rag-local
+      LAMBDA_TIMEOUT: "900"
+      USE_LOCAL_LLM: "true"
+      # Lambda コンテナ (genai-net) から LiteLLM 経由で LM Studio へ
+      LMSTUDIO_BASE_URL: "http://litellm:4000/v1"
+      LMSTUDIO_API_KEY: "sk-localdummy"
+      # LiteLLM config.yaml で定義したモデル名に合わせる
+      LMSTUDIO_CHAT_MODEL: "chat"
+      LMSTUDIO_EMBEDDING_MODEL: "embed"
+    working_dir: /work/localstack
+    volumes:
+      # genai-ai-api リポジトリの query-expansion-rag をマウント
+      - ${QE_RAG_REPO:-../genai-ai-api}/aws/query-expansion-rag:/work
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -e
+        apt-get update -qq && apt-get install -y -qq zip >/dev/null
+        pip install --quiet awscli
+        bash deploy.sh
+    depends_on:
+      localstack:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    profiles: ["qe-rag"]
+    networks:
+      - genai-net
+
+networks:
+  genai-net:
+    external: true
+    name: genai-net
