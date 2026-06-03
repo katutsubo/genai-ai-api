@@ -24,7 +24,9 @@
 # 前提:
 #   - docker / docker compose
 #   - awslocal (pip install awscli-local) または aws --endpoint-url=http://localhost:4566
-#   - python3, pip, zip
+#   - python3, pip(または pip3 / python3 -m pip), zip
+#     ※ macOS などで `pip` が無い場合は pip3 / python3 -m pip を自動検出する。
+#       明示する場合は PIP=... を指定。
 
 set -euo pipefail
 
@@ -63,6 +65,23 @@ LOG_LEVEL="${LOG_LEVEL:-DEBUG}"
 APP_NAME="${APP_NAME:-}"
 APP_PARAM_FILE="${APP_PARAM_FILE:-}"
 
+# pip の選択:
+#  macOS などでは `pip` が PATH に無く `pip3` / `python3 -m pip` のみのことがある。
+#  PIP 環境変数で明示指定も可能。
+if [ -n "${PIP:-}" ]; then
+  : # ユーザ指定をそのまま使う
+elif command -v pip >/dev/null 2>&1; then
+  PIP="pip"
+elif command -v pip3 >/dev/null 2>&1; then
+  PIP="pip3"
+elif command -v python3 >/dev/null 2>&1; then
+  PIP="python3 -m pip"
+elif command -v python >/dev/null 2>&1; then
+  PIP="python -m pip"
+else
+  PIP=""
+fi
+
 # AWS CLI の選択:
 #  - AWS_ENDPOINT_URL が明示されていればそれを使う (コンテナ内 genai-net 等)
 #  - それ以外は awslocal があれば awslocal、無ければ aws --endpoint-url
@@ -79,7 +98,12 @@ rm -rf "${BUILD_DIR}" "${ZIP_FILE}"
 mkdir -p "${BUILD_DIR}"
 
 echo "[2/5] Installing dependencies and copying source..."
-pip install -r "${LAMBDA_SRC}/requirements.txt" -t "${BUILD_DIR}" --quiet
+if [ -z "${PIP}" ]; then
+  echo "ERROR: pip が見つかりません。pip / pip3 / python3 を入れるか PIP=... を指定してください。" >&2
+  exit 1
+fi
+echo "      using PIP='${PIP}'"
+${PIP} install -r "${LAMBDA_SRC}/requirements.txt" -t "${BUILD_DIR}" --quiet
 cp -a "${LAMBDA_SRC}/." "${BUILD_DIR}/"
 
 # config/defaults と config/apps を同梱 (本番ビルドと同様の配置)
