@@ -1,4 +1,0 @@
-{
-  "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"add\",\"arguments\":{\"a\":3,\"b\":4}}}",
-  "isBase64Encoded": false
-}
