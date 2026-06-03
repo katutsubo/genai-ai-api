@@ -1,0 +1,13 @@
+{
+  "488aa4a6-9e86-4ab5-a68b-12efb5e80cec": {
+    "exAppName": "クエリ拡張RAG（ローカル）",
+    "description": "LM Studio + LocalStack で動作するクエリ拡張RAGです。",
+    "ragApiUrl": "http://localstack:4566/restapis/qeragapi/local/_user_request_/",
+    "placeholder": {
+      "question": { "type": "textarea", "title": "質問", "desc": "RAGに質問したい内容", "required": true, "max_length": 1000 },
+      "model": { "type": "select", "title": "モデル", "desc": "使用するローカルLLMモデル（LM Studioから自動取得）", "items_source": "models", "required": false },
+      "n_queries": { "type": "number", "title": "クエリ拡張数", "default_value": "1", "min": 1, "max": 5 },
+      "output_in_detail": { "type": "hidden", "default_value": "false" }
+    }
+  }
+}

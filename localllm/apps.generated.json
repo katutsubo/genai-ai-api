@@ -1,0 +1,56 @@
+{
+  "E39FFF9B-49F6-4A32-A200-AE67C6321FD5": {
+    "exAppName": "シンプルRAG（拡張なし）",
+    "description": "クエリ拡張を行わないRAG。",
+    "ragApiUrl": "http://localstack:4566/restapis/aidqapi/local/_user_request_/",
+    "placeholder": {
+      "question": { "type": "textarea", "title": "質問", "required": true },
+      "model": { "type": "select", "title": "モデル", "desc": "使用するローカルLLMモデル（LM Studioから自動取得）", "items_source": "models", "required": false },
+      "department": { "type": "select", "title": "対象部署",
+        "items": [ {"title":"総務","value":"general"}, {"title":"人事","value":"hr"} ] }
+    }
+  },
+  "F1A2B3C4-D5E6-47F8-9A0B-1C2D3E4F5A6B": {
+    "exAppName": "MCPエージェント（ローカル）",
+    "description": "プロンプトからMCPサーバとツールを指定して実行できるローカルエージェントです。",
+    "howToUse": "## 概要\nプロンプトの先頭でMCPサーバを指定し、登録済みツールをローカルLLM経由で、または直接呼び出せます。\n\n## 使い方\n- `#server=<id>` を先頭行に書くと、そのサーバのツールをLLMが自動選択して実行します。\n- `@<id>:<tool> {\"引数\":...}` と書くと、ツールを直接実行します（例: `@local:add {\"a\":3,\"b\":4}`）。\n- 指定が無い場合は先頭のサーバを使い、LLMがツールを選びます。\n- ファイルを添付すると process_file で解析し、その要約を文脈に含めます。\n\n{{mcp_catalog}}",
+    "mode": "mcp_agent",
+    "mcpServers": {
+      "local": {
+        "name": "ローカルMCP",
+        "url": "http://localstack:4566/restapis/mcpapi/local/_user_request_/",
+        "description": "LocalStack上の既定MCPサーバ。echo / add / list_models / process_file を提供します。"
+      }
+    },
+    "placeholder": {
+      "prompt": {
+        "type": "textarea",
+        "title": "プロンプト",
+        "desc": "サーバ指定例: 先頭行に #server=local / もしくは @local:add {\"a\":3,\"b\":4} のように直接指定。詳しい使い方は上の説明を参照してください。",
+        "required": true,
+        "max_length": 4000
+      },
+      "model": { "type": "select", "title": "モデル", "desc": "使用するローカルLLMモデル（LM Studioから自動取得）", "items_source": "models", "required": false },
+      "file": {
+        "type": "file",
+        "title": "添付ファイル（任意）",
+        "desc": "添付すると process_file で解析し、その要約を文脈に含めます",
+        "required": false,
+        "accept": ".txt,.md,.csv,.tsv,.json,.log,.xml,.yaml,.yml,.ini,.conf,text/*",
+        "max_size": "1MB",
+        "multiple": false
+      }
+    }
+  },
+  "488aa4a6-9e86-4ab5-a68b-12efb5e80cec": {
+    "exAppName": "クエリ拡張RAG（ローカル）",
+    "description": "LM Studio + LocalStack で動作するクエリ拡張RAGです。",
+    "ragApiUrl": "http://localstack:4566/restapis/qeragapi/local/_user_request_/",
+    "placeholder": {
+      "question": { "type": "textarea", "title": "質問", "desc": "RAGに質問したい内容", "required": true, "max_length": 1000 },
+      "model": { "type": "select", "title": "モデル", "desc": "使用するローカルLLMモデル（LM Studioから自動取得）", "items_source": "models", "required": false },
+      "n_queries": { "type": "number", "title": "クエリ拡張数", "default_value": "1", "min": 1, "max": 5 },
+      "output_in_detail": { "type": "hidden", "default_value": "false" }
+    }
+  }
+}

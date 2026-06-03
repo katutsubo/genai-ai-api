@@ -14,6 +14,10 @@
 #   localllm/ai-dq-mcp/localstack       … MCP  (mcpapi  / mcp-local)    deploy-mcp.sh
 #   localllm/common/localstack          … 共有 (deploy-apigw.sh / invoke.sh / 本スクリプト)
 #
+# アプリ画面定義(exapps-proxy 用):
+#   各アプリの exapp.json を build-apps-json.sh が localllm/apps.generated.json に集約する。
+#   本スクリプトの先頭で自動実行する。
+#
 # 使い方:
 #   cd localllm/common/localstack
 #   bash redeploy-all.sh
@@ -31,6 +35,7 @@ LOCALLLM_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 AIDQ_LS="${LOCALLLM_DIR}/ai-dq/localstack"
 MCP_LS="${LOCALLLM_DIR}/ai-dq-mcp/localstack"
 APIGW="${SCRIPT_DIR}/deploy-apigw.sh"
+BUILD_APPS="${SCRIPT_DIR}/build-apps-json.sh"
 
 # ---- 共通設定(環境変数で上書き可) ----
 export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://localhost:4566}"
@@ -38,6 +43,15 @@ export LMSTUDIO_BASE_URL="${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/
 export LMSTUDIO_API_KEY="${LMSTUDIO_API_KEY:-lm-studio}"
 export LMSTUDIO_CHAT_MODEL="${LMSTUDIO_CHAT_MODEL:-}"
 export LMSTUDIO_EMBEDDING_MODEL="${LMSTUDIO_EMBEDDING_MODEL:-}"
+
+# ---- exapps-proxy 用 apps.generated.json を生成 ----
+# 各アプリの localllm/<app>/exapp.json を集約する。jq が無い等で失敗しても
+# Lambda デプロイ自体は続行する(画面定義は既存の生成物を使う)。
+if [ -f "${BUILD_APPS}" ]; then
+  echo
+  echo "[apps] generating apps.generated.json from localllm/*/exapp.json ..."
+  bash "${BUILD_APPS}" || echo "  (warning) apps.generated.json の生成に失敗しました(既存ファイルを使用)"
+fi
 
 echo "=================================================="
 echo " redeploy-all (split layout)"

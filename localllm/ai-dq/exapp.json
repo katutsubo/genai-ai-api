@@ -1,0 +1,13 @@
+{
+  "E39FFF9B-49F6-4A32-A200-AE67C6321FD5": {
+    "exAppName": "シンプルRAG（拡張なし）",
+    "description": "クエリ拡張を行わないRAG。",
+    "ragApiUrl": "http://localstack:4566/restapis/aidqapi/local/_user_request_/",
+    "placeholder": {
+      "question": { "type": "textarea", "title": "質問", "required": true },
+      "model": { "type": "select", "title": "モデル", "desc": "使用するローカルLLMモデル（LM Studioから自動取得）", "items_source": "models", "required": false },
+      "department": { "type": "select", "title": "対象部署",
+        "items": [ {"title":"総務","value":"general"}, {"title":"人事","value":"hr"} ] }
+    }
+  }
+}
