@@ -41,6 +41,23 @@ LMSTUDIO_API_KEY="${LMSTUDIO_API_KEY:-lm-studio}"
 MCP_SERVER_NAME="${MCP_SERVER_NAME:-localstack-mcp}"
 MCP_SERVER_VERSION="${MCP_SERVER_VERSION:-0.1.0}"
 
+# pip の選択:
+#  macOS などでは `pip` が PATH に無く `pip3` / `python3 -m pip` のみのことがある。
+#  PIP 環境変数で明示指定も可能。
+if [ -n "${PIP:-}" ]; then
+  : # ユーザ指定をそのまま使う
+elif command -v pip >/dev/null 2>&1; then
+  PIP="pip"
+elif command -v pip3 >/dev/null 2>&1; then
+  PIP="pip3"
+elif command -v python3 >/dev/null 2>&1; then
+  PIP="python3 -m pip"
+elif command -v python >/dev/null 2>&1; then
+  PIP="python -m pip"
+else
+  PIP=""
+fi
+
 # AWS CLI の選択
 if [ -n "${AWS_ENDPOINT_URL:-}" ]; then
   AWS="aws --endpoint-url=${AWS_ENDPOINT_URL}"
@@ -55,9 +72,18 @@ rm -rf "${BUILD_DIR}" "${ZIP_FILE}"
 mkdir -p "${BUILD_DIR}"
 
 echo "[2/5] Installing dependencies and copying source..."
-if [ -f "${LAMBDA_SRC}/requirements.txt" ]; then
-  # 依存が空でも pip install は成功する
-  pip install -r "${LAMBDA_SRC}/requirements.txt" -t "${BUILD_DIR}" --quiet || true
+# requirements.txt が空(コメントのみ)なら依存は無いので pip をスキップしてよい。
+# 非空の依存がある場合のみ pip install する。
+if [ -f "${LAMBDA_SRC}/requirements.txt" ] \
+   && grep -qE '^[[:space:]]*[^#[:space:]]' "${LAMBDA_SRC}/requirements.txt"; then
+  if [ -z "${PIP}" ]; then
+    echo "ERROR: pip が見つかりません。pip / pip3 / python3 を入れるか PIP=... を指定してください。" >&2
+    exit 1
+  fi
+  echo "      using PIP='${PIP}'"
+  ${PIP} install -r "${LAMBDA_SRC}/requirements.txt" -t "${BUILD_DIR}" --quiet
+else
+  echo "      no external dependencies (skipping pip install)"
 fi
 cp -a "${LAMBDA_SRC}/." "${BUILD_DIR}/"
 # テストはパッケージに含めない
