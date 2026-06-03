@@ -31,14 +31,17 @@ export LMSTUDIO_CHAT_MODEL="${LMSTUDIO_CHAT_MODEL:-}"
 export LMSTUDIO_EMBEDDING_MODEL="${LMSTUDIO_EMBEDDING_MODEL:-}"
 
 # ---- アプリ定義 ----
-# 1行 = 1アプリ。書式: "<FUNCTION_NAME>|<API_ID>|<APP_NAME>|<APP_PARAM_FILE>"
+# 1行 = 1アプリ。書式: "<FUNCTION_NAME>|<API_ID>|<APP_NAME>|<APP_PARAM_FILE>|<DEPLOY_SCRIPT>"
 #   FUNCTION_NAME : Lambda 関数名
 #   API_ID        : API Gateway の custom id (URL に出る)
 #   APP_NAME      : レスポンスフッター等で使うアプリ名
 #   APP_PARAM_FILE: config/apps/ 配下の TOML (空文字なら defaults のみ)
+#   DEPLOY_SCRIPT : 使用するデプロイスクリプト (空文字なら deploy.sh)
+#                   MCP のように別ソース/別ビルドのアプリは deploy-mcp.sh を指定する
 APPS=(
-  "qe-rag-local|qeragapi|qe-rag-local|"
-  "aidq-local|aidqapi|aidq|aidq.toml"
+  "qe-rag-local|qeragapi|qe-rag-local||deploy.sh"
+  "aidq-local|aidqapi|aidq|aidq.toml|deploy.sh"
+  "mcp-local|mcpapi|mcp||deploy-mcp.sh"
 )
 
 echo "=================================================="
@@ -48,17 +51,18 @@ echo "   LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL}"
 echo "=================================================="
 
 for entry in "${APPS[@]}"; do
-  IFS='|' read -r fn api app_name app_file <<< "${entry}"
+  IFS='|' read -r fn api app_name app_file deploy_script <<< "${entry}"
+  deploy_script="${deploy_script:-deploy.sh}"
 
   echo
   echo "##################################################"
-  echo "# Deploying: ${app_name}  (fn=${fn}, api=${api}, toml=${app_file:-<none>})"
+  echo "# Deploying: ${app_name}  (fn=${fn}, api=${api}, toml=${app_file:-<none>}, script=${deploy_script})"
   echo "##################################################"
 
   FUNCTION_NAME="${fn}" \
   APP_NAME="${app_name}" \
   APP_PARAM_FILE="${app_file}" \
-  bash deploy.sh
+  bash "${deploy_script}"
 
   FUNCTION_NAME="${fn}" \
   API_ID="${api}" \
@@ -69,7 +73,7 @@ echo
 echo "=================================================="
 echo " All apps deployed. Endpoints:"
 for entry in "${APPS[@]}"; do
-  IFS='|' read -r fn api app_name app_file <<< "${entry}"
+  IFS='|' read -r fn api app_name app_file deploy_script <<< "${entry}"
   echo "   ${app_name}: ${AWS_ENDPOINT_URL}/restapis/${api}/local/_user_request_/"
 done
 echo "=================================================="
@@ -78,3 +82,8 @@ echo "Smoke test (qe-rag):"
 echo "  curl -s -XPOST '${AWS_ENDPOINT_URL}/restapis/qeragapi/local/_user_request_/' \\"
 echo "    -H 'Content-Type: application/json' \\"
 echo "    -d '{\"inputs\":{\"question\":\"テスト\",\"n_queries\":1}}'"
+echo
+echo "Smoke test (mcp):"
+echo "  curl -s -XPOST '${AWS_ENDPOINT_URL}/restapis/mcpapi/local/_user_request_/' \\"
+echo "    -H 'Content-Type: application/json' \\"
+echo "    -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}'"
