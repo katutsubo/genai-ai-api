@@ -1,0 +1,2 @@
+# MCP サーバは Python 標準ライブラリのみで実装しているため追加依存はない。
+# (deploy-mcp.sh は requirements.txt があれば pip install するが、空でも問題ない)

@@ -1,0 +1,4 @@
+{
+  "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"process_file\",\"arguments\":{\"filename\":\"sample.txt\",\"content_type\":\"text/plain\",\"content_base64\":\"bGluZTEKbGluZTIKbGluZTMK\"}}}",
+  "isBase64Encoded": false
+}
