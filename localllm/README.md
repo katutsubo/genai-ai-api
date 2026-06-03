@@ -1,7 +1,7 @@
 # 新規 AI アプリ追加手順（ローカル版）
 
 genai-web を**無改修**のまま、AIアプリ画面 `/apps/{teamId}/{exAppId}` から
-新しい RAG / LLM アプリを呼び出せるようにする手順をまとめます。
+新しい RAG / LLM / MCP アプリを呼び出せるようにする手順をまとめます。
 
 ## 全体像
 
@@ -9,22 +9,62 @@ genai-web を**無改修**のまま、AIアプリ画面 `/apps/{teamId}/{exAppId
 
 | レイヤー | 作業内容 | 触る場所 |
 |---|---|---|
-| ① ロジック | アプリ固有の挙動(プロンプト・モデル・推論パラメータ) | `genai-ai-api/localllm/ai-dq/config/apps/<app>.toml` |
-| ② デプロイ／公開 | Lambda を別名で立て、別 custom id で HTTP 公開 | `deploy.sh` / `deploy-apigw.sh`（環境変数で制御） |
+| ① ロジック | アプリ固有の挙動(プロンプト・モデル・推論パラメータ / MCPツール) | `genai-ai-api/localllm/<app>/...` |
+| ② デプロイ／公開 | Lambda を別名で立て、別 custom id で HTTP 公開 | 各 `<app>/localstack/deploy*.sh` + 共有 `common/localstack/deploy-apigw.sh` |
 | ③ 画面 | genai-web の AIアプリ画面に出す（フォーム定義＋呼び先URL） | `exapps-proxy/apps.json` |
+
+### アプリ ↔ ディレクトリ対応
+
+`exapps-proxy/apps.json` に登録された各アプリ(exAppId)は、`localllm` 配下の
+ディレクトリと 1 対 1 で対応します。
+
+| exAppId | ディレクトリ | 種別 | API_ID / FUNCTION_NAME |
+|---|---|---|---|
+| `488aa4a6-9e86-4ab5-a68b-12efb5e80cec` | `localllm/query-expansion-rag` | RAG(クエリ拡張) | `qeragapi` / `qe-rag-local` |
+| `E39FFF9B-49F6-4A32-A200-AE67C6321FD5` | `localllm/ai-dq` | RAG(拡張なし) | `aidqapi` / `aidq-local` |
+| `F1A2B3C4-D5E6-47F8-9A0B-1C2D3E4F5A6B` | `localllm/ai-dq-mcp` | MCP エージェント | `mcpapi` / `mcp-local` |
+
+共有スクリプト（複数アプリで使い回すもの）は `localllm/common/localstack/` に集約しています。
+
+```
+localllm/
+├── query-expansion-rag/      # ① RAG(クエリ拡張)
+├── ai-dq/                    # ② RAG(拡張なし)
+│   └── localstack/
+│       ├── deploy.sh         #   RAG 用デプロイ
+│       └── (RAG 専用ファイル)
+├── ai-dq-mcp/               # ③ MCP エージェント
+│   └── localstack/
+│       ├── mcp-lambda/       #   MCP Lambda ソース
+│       ├── deploy-mcp.sh     #   MCP 用デプロイ
+│       ├── invoke-mcp-file.sh
+│       ├── event.mcp*.json
+│       └── README.md         #   MCP 詳細手順
+└── common/                  # 共有スクリプト
+    └── localstack/
+        ├── deploy-apigw.sh   #   Lambda を HTTP 公開（全アプリ共通）
+        ├── invoke.sh         #   Lambda 直接 invoke（全アプリ共通）
+        └── redeploy-all.sh   #   RAG + MCP をまとめて再デプロイ
+```
 
 ### 識別子の対応関係
 
 1 つのアプリは以下の名前で紐づきます。**衝突しない値**を決めてください。
 
-| 項目 | 役割 | 例(クエリ拡張RAG) | 例(AI-DQ) |
-|---|---|---|---|
-| `<app>` | アプリ短縮名 | `qerag` | `aidq` |
-| TOML | アプリ個別設定 | `qerag.toml` | `aidq.toml` |
-| `FUNCTION_NAME` | Lambda 関数名 | `qe-rag-local` | `aidq-local` |
-| `API_ID` | API Gateway custom id | `qeragapi` | `aidqapi` |
-| `ragApiUrl` | 公開HTTP URL | `.../restapis/qeragapi/...` | `.../restapis/aidqapi/...` |
-| `exAppId` | 画面URLのアプリID(任意UUID) | `488aa4a6-...` | `E39FFF9B-...` |
+| 項目 | 役割 | 例(クエリ拡張RAG) | 例(AI-DQ) | 例(MCP) |
+|---|---|---|---|---|
+| `<app>` | アプリ短縮名 | `qerag` | `aidq` | `mcp` |
+| ディレクトリ | ロジック配置先 | `query-expansion-rag` | `ai-dq` | `ai-dq-mcp` |
+| 設定 | アプリ個別設定 | `qerag.toml` | `aidq.toml` | （TOML不要・環境変数） |
+| `FUNCTION_NAME` | Lambda 関数名 | `qe-rag-local` | `aidq-local` | `mcp-local` |
+| `API_ID` | API Gateway custom id | `qeragapi` | `aidqapi` | `mcpapi` |
+| 公開URL | HTTP エンドポイント | `.../restapis/qeragapi/...` | `.../restapis/aidqapi/...` | `.../restapis/mcpapi/...` |
+| `exAppId` | 画面URLのアプリID(任意UUID) | `488aa4a6-...` | `E39FFF9B-...` | `F1A2B3C4-...` |
+
+> **重要:** `API_ID` / `FUNCTION_NAME` は公開 URL（`.../restapis/<API_ID>/local/...`）に直結し、
+> `exapps-proxy/apps.json` の `ragApiUrl` / `mcpServers[].url` が参照しています。
+> ディレクトリを移動・整理しても、これらの規約値は変更しないでください
+> （変えると apps.json 側の修正が必要になります）。
 
 ---
 
@@ -42,7 +82,7 @@ genai-web を**無改修**のまま、AIアプリ画面 `/apps/{teamId}/{exAppId
   cd genai-ai-api && git pull origin localstack-lmstudio && cd -
   ```
 
-### 1. アプリ設定 TOML を作成（① ロジック）
+### 1. アプリ設定 TOML を作成（① ロジック / RAG の場合）
 
 `genai-ai-api/localllm/ai-dq/config/apps/<app>.toml` を作成します。
 `config/defaults/*.toml` を**上書きしたい項目だけ**書きます（未記述は既定値）。
@@ -72,8 +112,13 @@ temperature = 0
 > 利用可能なキーは `config/defaults/*.toml` に準拠します。
 > `modelId` / `systemPrompt` / `temperature` / `maxTokens` / `topP` / `topK` /
 > `stopSequences` / `maxCitations` などが `config_manager.py` で参照されます。
+>
+> **MCP アプリ（ai-dq-mcp）には TOML はありません。** ツールは `mcp-lambda/app.py` に実装し、
+> 接続先などは環境変数で渡します。詳細は `localllm/ai-dq-mcp/localstack/README.md` を参照。
 
 ### 2. Lambda をデプロイ（② デプロイ）
+
+#### RAG アプリの場合（ai-dq）
 
 別名 `FUNCTION_NAME` ＋ アプリ設定 `APP_PARAM_FILE` / `APP_NAME` を渡して実行します。
 
@@ -95,20 +140,37 @@ bash deploy.sh
 > LiteLLM 経由にする場合は
 > `LMSTUDIO_BASE_URL=http://litellm:4000/v1 LMSTUDIO_API_KEY=sk-localdummy LMSTUDIO_CHAT_MODEL=chat LMSTUDIO_EMBEDDING_MODEL=embed` に変更。
 
-### 3. API Gateway で HTTP 公開（② 公開）
-
-別 custom id `API_ID` で公開します。
+#### MCP アプリの場合（ai-dq-mcp）
 
 ```bash
-API_ID=<app>api \
-FUNCTION_NAME=<app>-local \
-bash deploy-apigw.sh
+cd genai-ai-api/localllm/ai-dq-mcp/localstack
+FUNCTION_NAME=mcp-local bash deploy-mcp.sh
+```
+
+### 3. API Gateway で HTTP 公開（② 公開）
+
+別 custom id `API_ID` で公開します。**共有スクリプトを `common/localstack/` から呼びます。**
+
+```bash
+# RAG（ai-dq/localstack から）
+API_ID=<app>api FUNCTION_NAME=<app>-local \
+  bash ../../common/localstack/deploy-apigw.sh
+
+# MCP（ai-dq-mcp/localstack から）
+API_ID=mcpapi FUNCTION_NAME=mcp-local \
+  bash ../../common/localstack/deploy-apigw.sh
 ```
 
 公開URL:
 ```
 http://localhost:4566/restapis/<app>api/local/_user_request_/
 ```
+
+> すべてのアプリ（RAG + MCP）をまとめて復旧したい場合は共有の統合スクリプトが便利です:
+> ```bash
+> cd genai-ai-api/localllm/common/localstack
+> bash redeploy-all.sh
+> ```
 
 ### 4. 動作確認（Lambda 単体）
 
@@ -117,11 +179,16 @@ http://localhost:4566/restapis/<app>api/local/_user_request_/
 aws --endpoint-url=http://localhost:4566 lambda get-function-configuration \
   --function-name <app>-local --query 'Environment.Variables'
 
-# 実行(responseFooter が TOML の文言になれば設定が効いている)
+# 実行(RAG: responseFooter が TOML の文言になれば設定が効いている)
 curl -s -XPOST 'http://localhost:4566/restapis/<app>api/local/_user_request_/' \
   -H 'Content-Type: application/json' \
   -d '{"inputs":{"question":"テスト質問","n_queries":2}}'
 # → {"statusCode":200,"body":"{\"outputs\": ...}"} を期待
+
+# 実行(MCP: tools/list)
+curl -s -XPOST 'http://localhost:4566/restapis/mcpapi/local/_user_request_/' \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 ### 5. 画面に登録（③ 画面）
@@ -133,6 +200,8 @@ curl -s -XPOST 'http://localhost:4566/restapis/<app>api/local/_user_request_/' \
 uuidgen
 ```
 
+RAG アプリの例:
+
 ```json
 {
   "<生成したUUID>": {
@@ -143,6 +212,28 @@ uuidgen
       "question": { "type": "textarea", "title": "質問", "required": true, "max_length": 1000 },
       "n_queries": { "type": "number", "title": "クエリ拡張数", "default_value": "1", "min": 1, "max": 5 },
       "output_in_detail": { "type": "hidden", "default_value": "false" }
+    }
+  }
+}
+```
+
+MCP アプリの例（`mode: "mcp_agent"`）:
+
+```json
+{
+  "<生成したUUID>": {
+    "exAppName": "MCPエージェント（ローカル）",
+    "description": "プロンプトからMCPサーバとツールを指定して実行します。",
+    "mode": "mcp_agent",
+    "mcpServers": {
+      "local": {
+        "name": "ローカルMCP",
+        "url": "http://localstack:4566/restapis/mcpapi/local/_user_request_/",
+        "description": "echo / add / list_models / process_file"
+      }
+    },
+    "placeholder": {
+      "prompt": { "type": "textarea", "title": "プロンプト", "required": true }
     }
   }
 }
@@ -162,7 +253,7 @@ curl -s http://localhost:4100/healthz | jq '.apps'
 http://localhost:5173/apps/{任意teamId}/{追加したexAppId}
 ```
 
-「質問」を入力して「実行」 → 新アプリの挙動で回答が表示されます。
+「質問」やプロンプトを入力して「実行」 → 新アプリの挙動で回答が表示されます。
 
 ### 7. （任意）ホーム画面の「おすすめアプリ」に出す
 
@@ -219,9 +310,11 @@ VITE_APP_GOVAIS_FOR_HOMEPAGE: '["488aa4a6-9e86-4ab5-a68b-12efb5e80cec","<追加�
 
 新規アプリ `<app>` を追加するとき:
 
-- [ ] `config/apps/<app>.toml` を作成（① ロジック）
-- [ ] `FUNCTION_NAME=<app>-local APP_PARAM_FILE=<app>.toml` で `deploy.sh`（② デプロイ）
-- [ ] `API_ID=<app>api` で `deploy-apigw.sh`（② 公開）
+- [ ] ディレクトリを決める（RAG: `ai-dq` 流用 / MCP: `ai-dq-mcp` 流用 or 新規 `<app>`）
+- [ ] （RAG）`config/apps/<app>.toml` を作成（① ロジック）
+- [ ] （RAG）`FUNCTION_NAME=<app>-local APP_PARAM_FILE=<app>.toml` で `deploy.sh`（② デプロイ）
+- [ ] （MCP）`FUNCTION_NAME=mcp-local` で `deploy-mcp.sh`（② デプロイ）
+- [ ] `API_ID=<app>api` で `common/localstack/deploy-apigw.sh`（② 公開）
 - [ ] Lambda 単体で動作確認（手順4）
 - [ ] `exapps-proxy/apps.json` に exAppId エントリ追加（③ 画面）
 - [ ] `docker compose restart exapps-proxy`
@@ -239,3 +332,5 @@ VITE_APP_GOVAIS_FOR_HOMEPAGE: '["488aa4a6-9e86-4ab5-a68b-12efb5e80cec","<追加�
 | 別アプリなのに同じ画面 | `apps.json` に該当 exAppId が無く先頭にフォールバック。`/healthz` の `apps` を確認 |
 | 実行が 400 / メモリ不足 | LM Studio のモデルが大きすぎる。3B〜7B級に変更 |
 | `Task timed out` | `LAMBDA_TIMEOUT`(既定900秒)を確認。ローカルLLMは低速 |
+| `deploy-apigw.sh が見つからない` | 共有スクリプトは `common/localstack/` に移動済み。`bash ../../common/localstack/deploy-apigw.sh` で呼ぶ |
+| MCP が応答しない | `API_ID=mcpapi FUNCTION_NAME=mcp-local` で公開したか確認。詳細は `ai-dq-mcp/localstack/README.md` |
