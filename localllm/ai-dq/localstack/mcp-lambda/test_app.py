@@ -43,7 +43,7 @@ def test_tools_list():
     assert res["statusCode"] == 200
     body = json.loads(res["body"])
     names = {t["name"] for t in body["result"]["tools"]}
-    assert {"echo", "add"}.issubset(names)
+    assert {"echo", "add", "process_file"}.issubset(names)
 
 
 def test_tools_call_echo():
@@ -120,6 +120,67 @@ def test_batch():
     # 通知は応答に含まれないので 2 件
     assert isinstance(body, list)
     assert len(body) == 2
+
+
+# ---------------------------------------------------------------------------
+# process_file ツールのテスト
+# ---------------------------------------------------------------------------
+def _call_process_file(arguments, req_id=10):
+    res = _invoke(
+        {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "method": "tools/call",
+            "params": {"name": "process_file", "arguments": arguments},
+        }
+    )
+    return json.loads(res["body"])
+
+
+def test_process_file_text():
+    content = "line1\nline2\nline3\n"
+    b64 = base64.b64encode(content.encode("utf-8")).decode("utf-8")
+    body = _call_process_file(
+        {
+            "filename": "sample.txt",
+            "content_base64": b64,
+            "content_type": "text/plain",
+        }
+    )
+    summary = json.loads(body["result"]["content"][0]["text"])
+    assert summary["filename"] == "sample.txt"
+    assert summary["content_type"] == "text/plain"
+    assert summary["size_bytes"] == len(content.encode("utf-8"))
+    assert summary["is_text"] is True
+    assert summary["char_count"] == len(content)
+    assert summary["line_count"] == 4
+    assert summary["preview"].startswith("line1")
+    assert summary["preview_truncated"] is False
+
+
+def test_process_file_binary():
+    # UTF-8 として不正なバイト列
+    raw = bytes([0xFF, 0xFE, 0x00, 0x01, 0x80])
+    b64 = base64.b64encode(raw).decode("utf-8")
+    body = _call_process_file(
+        {"filename": "blob.bin", "content_base64": b64}
+    )
+    summary = json.loads(body["result"]["content"][0]["text"])
+    assert summary["size_bytes"] == len(raw)
+    assert summary["is_text"] is False
+    assert "preview" not in summary
+
+
+def test_process_file_missing_args():
+    body = _call_process_file({"filename": "only-name.txt"})
+    assert body["error"]["code"] == -32602
+
+
+def test_process_file_invalid_base64():
+    body = _call_process_file(
+        {"filename": "bad.txt", "content_base64": "not*valid*base64"}
+    )
+    assert body["error"]["code"] == -32602
 
 
 if __name__ == "__main__":
