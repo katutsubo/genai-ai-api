@@ -1,0 +1,14 @@
+以下のテーブルメタデータを基に、PostgreSQL のセマンティックビュー DDL を生成してください。
+
+テーブル名: {table_name}
+
+メタデータ:
+{metadata_json}
+
+要件:
+- CREATE VIEW {table_name}_semantic AS SELECT ... FROM {table_name} を生成
+- COMMENT ON VIEW で日本語・英語説明を付与
+- 各カラムに COMMENT ON COLUMN で説明を付与
+- LLM 向けのクエリヒントをコメントとして含める
+
+SQL のみを出力し、説明文や markdown は含めないでください。
