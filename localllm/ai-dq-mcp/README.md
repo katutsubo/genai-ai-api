@@ -121,6 +121,18 @@ bash deploy-mcp.sh
 API_ID=mcpapi FUNCTION_NAME=mcp-local bash ../../common/localstack/deploy-apigw.sh
 ```
 
+> **genai-local 統合（LiteLLM 経由）で使う場合**
+> LocalStack の Lambda 実行コンテナからは `host.docker.internal` が名前解決できない
+> ことがあります（`<urlopen error [Errno 16] Device or resource busy>`）。
+> genai-local の `genai-net` 上で動かす場合は、`list_models` ツールの接続先を
+> 同ネットワークのサービス名 `litellm:4000` に向けてデプロイしてください:
+> ```bash
+> LMSTUDIO_BASE_URL=http://litellm:4000/v1 LMSTUDIO_API_KEY=sk-localdummy \
+>   bash deploy-mcp.sh
+> ```
+> 通常は後述の `redeploy-all.sh` に同じ環境変数を渡せば、RAG / AI-DQ / MCP の
+> 3アプリすべてが LiteLLM 経由でデプロイされます。
+
 公開される URL:
 
 ```
@@ -132,7 +144,17 @@ http://localhost:4566/restapis/mcpapi/local/_user_request_/
 ```bash
 cd localllm/common/localstack
 bash redeploy-all.sh
+
+# genai-local 統合（LiteLLM 経由）の場合:
+LMSTUDIO_BASE_URL=http://litellm:4000/v1 LMSTUDIO_API_KEY=sk-localdummy \
+  LMSTUDIO_CHAT_MODEL=chat LMSTUDIO_EMBEDDING_MODEL=embed \
+  bash redeploy-all.sh
 ```
+
+> ℹ️ `redeploy-all.sh` は内部で本ディレクトリの `deploy-mcp.sh` を呼び、続けて
+> `deploy-apigw.sh`（`API_ID=mcpapi`）で公開します。`deploy-mcp.sh` が無いと
+> `./deploy-mcp.sh: No such file or directory` で MCP のデプロイだけが失敗し、
+> `mcpapi` が未公開（MCP アプリが 404）になります。
 
 ## 動作確認（curl）
 
@@ -221,10 +243,11 @@ python test_app.py
 | 変数 | 既定値 | 説明 |
 |---|---|---|
 | `FUNCTION_NAME` | `mcp-local` | Lambda 関数名 |
-| `LAMBDA_TIMEOUT` | `30` | Lambda タイムアウト秒 |
-| `LAMBDA_MEMORY` | `256` | Lambda メモリ(MB) |
-| `LMSTUDIO_BASE_URL` | `http://host.docker.internal:1234/v1` | `list_models` が叩く OpenAI 互換エンドポイント |
-| `LMSTUDIO_API_KEY` | `lm-studio` | OpenAI 互換のダミーキー |
+| `LAMBDA_TIMEOUT` | `60` | Lambda タイムアウト秒 |
+| `LAMBDA_MEMORY` | `512` | Lambda メモリ(MB) |
+| `LMSTUDIO_BASE_URL` | `http://host.docker.internal:1234/v1` | `list_models` が叩く OpenAI 互換エンドポイント（genai-local 統合時は `http://litellm:4000/v1`） |
+| `LMSTUDIO_API_KEY` | `lm-studio` | OpenAI 互換のダミーキー（genai-local 統合時は `sk-localdummy`） |
+| `LMSTUDIO_TIMEOUT` | `15` | `list_models` の HTTP タイムアウト秒 |
 | `MCP_SERVER_NAME` | `localstack-mcp` | `initialize` の `serverInfo.name` |
 | `MCP_SERVER_VERSION` | `0.1.0` | `initialize` の `serverInfo.version` |
 | `MCP_FILE_PREVIEW_CHARS` | `2000` | `process_file` が返すテキストプレビューの最大文字数 |
@@ -238,6 +261,9 @@ python test_app.py
 - `process_file` は単発リクエスト内でファイル本体（base64）を受け取ります。API Gateway /
   Lambda のペイロード上限があるため、巨大ファイルは S3 経由にするなどの設計が必要です。
 - ランタイムは LocalStack が確実に対応する `python3.12` を使用します。
+- `list_models` ツールから LLM に接続したい場合、LocalStack の Lambda 実行コンテナからは
+  `host.docker.internal` が解決できないことがあります。genai-local 統合時は
+  `LMSTUDIO_BASE_URL=http://litellm:4000/v1` を指定してください（前述）。
 - 本構成は既存の RAG アプリ（`qe-rag-local` / `aidq-local`）のデプロイ・動作に影響しません。
 - **API_ID / FUNCTION_NAME は不変**（`mcpapi` / `mcp-local`）のため、`genai-local/exapps-proxy/apps.json`
   の `mcpServers[].url` の変更は不要です。
