@@ -1,15 +1,4 @@
 {
-  "E39FFF9B-49F6-4A32-A200-AE67C6321FD5": {
-    "exAppName": "シンプルRAG（拡張なし）",
-    "description": "クエリ拡張を行わないRAG。",
-    "ragApiUrl": "http://localstack:4566/restapis/aidqapi/local/_user_request_/",
-    "placeholder": {
-      "question": { "type": "textarea", "title": "質問", "required": true },
-      "model": { "type": "select", "title": "モデル", "desc": "使用するローカルLLMモデル（LM Studioから自動取得）", "items_source": "models", "required": false },
-      "department": { "type": "select", "title": "対象部署",
-        "items": [ {"title":"総務","value":"general"}, {"title":"人事","value":"hr"} ] }
-    }
-  },
   "F1A2B3C4-D5E6-47F8-9A0B-1C2D3E4F5A6B": {
     "exAppName": "MCPエージェント（ローカル）",
     "description": "プロンプトからMCPサーバとツールを指定して実行できるローカルエージェントです。",
@@ -30,7 +19,13 @@
         "required": true,
         "max_length": 4000
       },
-      "model": { "type": "select", "title": "モデル", "desc": "使用するローカルLLMモデル（LM Studioから自動取得）", "items_source": "models", "required": false },
+      "model": {
+        "type": "select",
+        "title": "モデル",
+        "desc": "使用するローカルLLMモデル（LM Studioから自動取得）",
+        "items_source": "models",
+        "required": false
+      },
       "file": {
         "type": "file",
         "title": "添付ファイル（任意）",
@@ -42,15 +37,69 @@
       }
     }
   },
+  "E39FFF9B-49F6-4A32-A200-AE67C6321FD5": {
+    "exAppName": "シンプルRAG（拡張なし）",
+    "description": "クエリ拡張を行わないRAG。",
+    "ragApiUrl": "http://localstack:4566/restapis/aidqapi/local/_user_request_/",
+    "placeholder": {
+      "question": {
+        "type": "textarea",
+        "title": "質問",
+        "required": true
+      },
+      "model": {
+        "type": "select",
+        "title": "モデル",
+        "desc": "使用するローカルLLMモデル（LM Studioから自動取得）",
+        "items_source": "models",
+        "required": false
+      },
+      "department": {
+        "type": "select",
+        "title": "対象部署",
+        "items": [
+          {
+            "title": "総務",
+            "value": "general"
+          },
+          {
+            "title": "人事",
+            "value": "hr"
+          }
+        ]
+      }
+    }
+  },
   "488aa4a6-9e86-4ab5-a68b-12efb5e80cec": {
     "exAppName": "クエリ拡張RAG（ローカル）",
     "description": "LM Studio + LocalStack で動作するクエリ拡張RAGです。",
     "ragApiUrl": "http://localstack:4566/restapis/qeragapi/local/_user_request_/",
     "placeholder": {
-      "question": { "type": "textarea", "title": "質問", "desc": "RAGに質問したい内容", "required": true, "max_length": 1000 },
-      "model": { "type": "select", "title": "モデル", "desc": "使用するローカルLLMモデル（LM Studioから自動取得）", "items_source": "models", "required": false },
-      "n_queries": { "type": "number", "title": "クエリ拡張数", "default_value": "1", "min": 1, "max": 5 },
-      "output_in_detail": { "type": "hidden", "default_value": "false" }
+      "question": {
+        "type": "textarea",
+        "title": "質問",
+        "desc": "RAGに質問したい内容",
+        "required": true,
+        "max_length": 1000
+      },
+      "model": {
+        "type": "select",
+        "title": "モデル",
+        "desc": "使用するローカルLLMモデル（LM Studioから自動取得）",
+        "items_source": "models",
+        "required": false
+      },
+      "n_queries": {
+        "type": "number",
+        "title": "クエリ拡張数",
+        "default_value": "1",
+        "min": 1,
+        "max": 5
+      },
+      "output_in_detail": {
+        "type": "hidden",
+        "default_value": "false"
+      }
     }
   }
 }
