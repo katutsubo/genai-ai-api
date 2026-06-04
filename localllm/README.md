@@ -257,12 +257,36 @@ http://localhost:5173/apps/{任意teamId}/{追加したexAppId}
 
 ### 7. （任意）ホーム画面の「おすすめアプリ」に出す
 
-`docker-compose.yaml` の `genai-web` 環境変数に exAppId を追加。
+ホーム画面の AIアプリ一覧（genai-web の `VITE_APP_GOVAIS_FOR_HOMEPAGE`）は、
+**`docker-compose.yaml` にハードコードせず**、各アプリの `exapp.json` から自動生成します。
+`build-apps-json.sh` が `apps.generated.json` と同時に
+`localllm/govais.generated.env` を生成し、genai-web が `env_file` で取り込みます。
 
-```yaml
-VITE_APP_GOVAIS_FOR_HOMEPAGE: '["488aa4a6-9e86-4ab5-a68b-12efb5e80cec","<追加したexAppId>"]'
+```bash
+# exapp.json を追加・編集したら再生成（apps.generated.json と govais.generated.env を更新）
+cd genai-ai-api/localllm/common/localstack
+bash build-apps-json.sh
+# ※ redeploy-all.sh は先頭で build-apps-json.sh を自動実行する
+
+# genai-web を作り直して反映（VITE_APP_* はビルド時に埋め込まれるため restart 不可）
+cd -   # genai-local ルートへ
+docker compose up -d --force-recreate genai-web
 ```
-反映: `docker compose up -d genai-web`
+
+生成される `govais.generated.env` は次の形式です（`exapp.json` の `exAppName` →
+`title`、キー → `exAppId`、`description` を自動補完）。
+
+```env
+VITE_APP_GOVAIS_FOR_HOMEPAGE=[{"title":"...","teamId":"00000000-0000-0000-0000-000000000000","exAppId":"...","description":"..."}]
+```
+
+> ⚠️ genai-web 側の `docker-compose.yaml` では、`env_file` の値が効くように
+> `environment` に `VITE_APP_GOVAIS_FOR_HOMEPAGE` を**書かないでください**
+> （`environment` は `env_file` より優先されるため上書きされます）。
+>
+> ℹ️ 一覧から外したいアプリがある場合は、その `exapp.json` を含めない運用にするか、
+> 生成後の `govais.generated.env` を手で編集してください（再生成で上書きされます）。
+> `teamId` を変えたい場合は `HOMEPAGE_TEAM_ID=<uuid> bash build-apps-json.sh`。
 
 ---
 
@@ -334,3 +358,4 @@ VITE_APP_GOVAIS_FOR_HOMEPAGE: '["488aa4a6-9e86-4ab5-a68b-12efb5e80cec","<追加�
 | `Task timed out` | `LAMBDA_TIMEOUT`(既定900秒)を確認。ローカルLLMは低速 |
 | `deploy-apigw.sh が見つからない` | 共有スクリプトは `common/localstack/` に移動済み。`bash ../../common/localstack/deploy-apigw.sh` で呼ぶ |
 | MCP が応答しない | `API_ID=mcpapi FUNCTION_NAME=mcp-local` で公開したか確認。詳細は `ai-dq-mcp/localstack/README.md` |
+| ホーム画面にアプリが出ない/古い | `build-apps-json.sh` を再実行して `govais.generated.env` を更新し、`docker compose up -d --force-recreate genai-web` で作り直す。`docker-compose.yaml` の `environment` に `VITE_APP_GOVAIS_FOR_HOMEPAGE` を書くと env_file が上書きされるので書かない |
