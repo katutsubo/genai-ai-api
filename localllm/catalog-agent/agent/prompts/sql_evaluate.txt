@@ -1,0 +1,24 @@
+以下の 2 つの SQL クエリを比較し、品質スコアを評価してください。
+
+質問: {question}
+
+SQL Before（メタデータなし）:
+{sql_before}
+
+実行結果 Before:
+{result_before}
+
+SQL After（メタデータ付き）:
+{sql_after}
+
+実行結果 After:
+{result_after}
+
+以下の JSON 形式で 各 SQL のスコアを出力してください:
+{
+  "correctness": 1-10,
+  "readability": 1-10,
+  "issues": ["問題点1", "問題点2"]
+}
+
+Before の SQL に対するスコアを出力してください。JSON のみを出力し、説明文は不要です。

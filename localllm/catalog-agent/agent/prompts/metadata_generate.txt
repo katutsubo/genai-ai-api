@@ -1,0 +1,32 @@
+以下の CSV テーブルのメタデータを生成してください。
+
+テーブル名: {table_name}
+
+スキーマサマリ:
+{schema_summary}
+
+以下の JSON 形式で出力してください。必ず日本語説明（description_ja）と英語説明（description_en）の両方を含めてください:
+
+{
+  "table_name": "{table_name}",
+  "description_ja": "テーブルの日本語説明",
+  "description_en": "Table description in English",
+  "domain": "ドメイン（例: government.statistics, finance.transactions）",
+  "owner": "所有者（例: data_team）",
+  "tags": ["タグ1", "タグ2"],
+  "columns": [
+    {
+      "name": "カラム名",
+      "description_ja": "カラムの日本語説明",
+      "description_en": "Column description in English",
+      "data_type": "データ型（pandas dtype）",
+      "is_nullable": true,
+      "is_primary_key": false,
+      "is_foreign_key": false,
+      "foreign_key_ref": null,
+      "tags": []
+    }
+  ]
+}
+
+JSON のみを出力し、説明文や markdown は含めないでください。
