@@ -13,6 +13,14 @@ genai-web を**無改修**のまま、AIアプリ画面 `/apps/{teamId}/{exAppId
 | ② デプロイ／公開 | Lambda を別名で立て、別 custom id で HTTP 公開 | 各 `<app>/localstack/deploy*.sh` + 共有 `common/localstack/deploy-apigw.sh` |
 | ③ 画面 | genai-web の AIアプリ画面に出す（フォーム定義＋呼び先URL） | `exapps-proxy/apps.json` |
 
+> **アプリの実行形態は 2 種類あります。**
+> - **Lambda 型**（`query-expansion-rag` / `ai-dq` / `ai-dq-mcp`）: LocalStack 上の Lambda を
+>   API Gateway で HTTP 公開し、`exapps-proxy` から呼びます（本手順の②が該当）。
+> - **コンテナ常駐型**（`catalog-agent`）: Lambda 化せず常駐コンテナ（`genai-net`, port `8002`）として動作し、
+>   `exapps-proxy` から `http://catalog-agent:8002/mcp` を MCP サーバとして直接参照します。
+>   API Gateway / Lambda デプロイ（②）は不要です。詳細は
+>   [`catalog-agent/README.md`](catalog-agent/README.md) を参照してください。
+
 ### アプリ ↔ ディレクトリ対応
 
 `exapps-proxy/apps.json` に登録された各アプリ(exAppId)は、`localllm` 配下の
@@ -22,7 +30,8 @@ genai-web を**無改修**のまま、AIアプリ画面 `/apps/{teamId}/{exAppId
 |---|---|---|---|
 | `488aa4a6-9e86-4ab5-a68b-12efb5e80cec` | `localllm/query-expansion-rag` | RAG(クエリ拡張) | `qeragapi` / `qe-rag-local` |
 | `E39FFF9B-49F6-4A32-A200-AE67C6321FD5` | `localllm/ai-dq` | RAG(拡張なし) | `aidqapi` / `aidq-local` |
-| `F1A2B3C4-D5E6-47F8-9A0B-1C2D3E4F5A6B` | `localllm/ai-dq-mcp` | MCP エージェント | `mcpapi` / `mcp-local` |
+| `F1A2B3C4-D5E6-47F8-9A0B-1C2D3E4F5A6B` | `localllm/ai-dq-mcp` | MCP エージェント(Lambda) | `mcpapi` / `mcp-local` |
+| `A7C3E2D1-4B5F-46A8-9C0D-2E3F4A5B6C7D` | `localllm/catalog-agent` | MCP エージェント(常駐コンテナ) | （Lambda/API_ID なし・`catalog-agent:8002/mcp`） |
 
 共有スクリプト（複数アプリで使い回すもの）は `localllm/common/localstack/` に集約しています。
 
@@ -33,13 +42,22 @@ localllm/
 │   └── localstack/
 │       ├── deploy.sh         #   RAG 用デプロイ
 │       └── (RAG 専用ファイル)
-├── ai-dq-mcp/               # ③ MCP エージェント
+├── ai-dq-mcp/               # ③ MCP エージェント(Lambda)
 │   └── localstack/
 │       ├── mcp-lambda/       #   MCP Lambda ソース
 │       ├── deploy-mcp.sh     #   MCP 用デプロイ
 │       ├── invoke-mcp-file.sh
 │       ├── event.mcp*.json
 │       └── README.md         #   MCP 詳細手順
+├── catalog-agent/           # ④ MCP エージェント(常駐コンテナ, :8002)
+│   ├── Dockerfile           #   uvicorn main:app --port 8002
+│   ├── exapp.json           #   mode: mcp_agent → /mcp
+│   ├── main.py              #   FastAPI: REST(/analyze) + MCP(/mcp)
+│   ├── frontend/            #   単体動作用 UI
+│   ├── rules/               #   品質チェックルール
+│   ├── agent/               #   parser/checker/catalog/textsql/llm
+│   ├── tests/               #   pytest
+│   └── README.md            #   catalog-agent 詳細手順
 └── common/                  # 共有スクリプト
     └── localstack/
         ├── deploy-apigw.sh   #   Lambda を HTTP 公開（全アプリ共通）
@@ -65,6 +83,9 @@ localllm/
 > `exapps-proxy/apps.json` の `ragApiUrl` / `mcpServers[].url` が参照しています。
 > ディレクトリを移動・整理しても、これらの規約値は変更しないでください
 > （変えると apps.json 側の修正が必要になります）。
+>
+> **コンテナ常駐型（catalog-agent）は Lambda/API_ID を持ちません。** `mcpServers[].url` が
+> コンテナのサービス名:ポート（`http://catalog-agent:8002/mcp`）を直接指します。
 
 ---
 
@@ -115,6 +136,10 @@ temperature = 0
 >
 > **MCP アプリ（ai-dq-mcp）には TOML はありません。** ツールは `mcp-lambda/app.py` に実装し、
 > 接続先などは環境変数で渡します。詳細は `localllm/ai-dq-mcp/localstack/README.md` を参照。
+>
+> **コンテナ常駐型（catalog-agent）にも TOML はありません。** 設定は環境変数
+> （`LITELLM_BASE_URL` / `LLM_MODEL` / `OUTPUT_DIR` ほか）で渡します。詳細は
+> `localllm/catalog-agent/README.md` を参照。
 
 ### 2. Lambda をデプロイ（② デプロイ）
 
@@ -146,6 +171,24 @@ bash deploy.sh
 cd genai-ai-api/localllm/ai-dq-mcp/localstack
 FUNCTION_NAME=mcp-local bash deploy-mcp.sh
 ```
+
+#### コンテナ常駐型の場合（catalog-agent）
+
+Lambda デプロイは不要です。`genai-net` 上にコンテナを起動します（`docker compose` に
+サービスを追加するか、単体でビルド・起動）。
+
+```bash
+cd genai-ai-api/localllm/catalog-agent
+docker build -t catalog-agent .
+docker run --rm --network genai-net --name catalog-agent -p 8002:8002 \
+  -e LITELLM_BASE_URL=http://litellm:4000 \
+  -e LLM_MODEL=chat \
+  catalog-agent
+```
+
+> 以降の「3. API Gateway で HTTP 公開」「4. 動作確認（Lambda 単体）」は
+> コンテナ常駐型には不要です。動作確認は `curl http://localhost:8002/mcp` で行います
+> （詳細は `catalog-agent/README.md`）。
 
 ### 3. API Gateway で HTTP 公開（② 公開）
 
@@ -189,6 +232,11 @@ curl -s -XPOST 'http://localhost:4566/restapis/<app>api/local/_user_request_/' \
 curl -s -XPOST 'http://localhost:4566/restapis/mcpapi/local/_user_request_/' \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# 実行(コンテナ常駐型 catalog-agent: tools/list)
+curl -s -XPOST 'http://localhost:8002/mcp' \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 ### 5. 画面に登録（③ 画面）
@@ -217,7 +265,7 @@ RAG アプリの例:
 }
 ```
 
-MCP アプリの例（`mode: "mcp_agent"`）:
+MCP アプリ（Lambda）の例（`mode: "mcp_agent"`）:
 
 ```json
 {
@@ -238,6 +286,33 @@ MCP アプリの例（`mode: "mcp_agent"`）:
   }
 }
 ```
+
+MCP アプリ（コンテナ常駐型 catalog-agent）の例（`mode: "mcp_agent"`）:
+
+```json
+{
+  "A7C3E2D1-4B5F-46A8-9C0D-2E3F4A5B6C7D": {
+    "exAppName": "データ品質＆カタログエージェント（ローカル）",
+    "description": "CSV をアップロードすると、品質チェック・データカタログ生成・Text-to-SQL 品質比較を実行する MCP エージェントです。",
+    "mode": "mcp_agent",
+    "mcpServers": {
+      "catalog": {
+        "name": "カタログエージェントMCP",
+        "url": "http://catalog-agent:8002/mcp",
+        "description": "catalog-agent コンテナが提供する MCP サーバ。analyze_csv ツールを提供します。"
+      }
+    },
+    "placeholder": {
+      "prompt": { "type": "textarea", "title": "Text-to-SQL 質問（任意）", "required": false },
+      "file": { "type": "file", "title": "CSV ファイル", "required": true, "accept": ".csv,text/csv" }
+    }
+  }
+}
+```
+
+> コンテナ常駐型は `mcpServers[].url` が **API Gateway を経由せず**、コンテナのサービス名:ポート
+> （`http://catalog-agent:8002/mcp`）を直接指します。`catalog-agent` が `genai-net` 上に
+> 起動している必要があります。
 
 反映:
 ```bash
@@ -305,6 +380,7 @@ VITE_APP_GOVAIS_FOR_HOMEPAGE=[{"title":"...","teamId":"00000000-0000-0000-0000-0
 | `select` | プルダウン | `items: [{title, value}]` |
 | `radio` | ラジオ | `items: [{title, value}]` |
 | `checkbox` | チェックボックス | `items: [{title, value}]` |
+| `file` | ファイル添付 | `accept` / `max_size` / `multiple` |
 | `hidden` | 非表示固定値 | `default_value` |
 
 共通属性: `title`（ラベル）/ `desc`（補足）/ `required` / `default_value`
@@ -334,12 +410,13 @@ VITE_APP_GOVAIS_FOR_HOMEPAGE=[{"title":"...","teamId":"00000000-0000-0000-0000-0
 
 新規アプリ `<app>` を追加するとき:
 
-- [ ] ディレクトリを決める（RAG: `ai-dq` 流用 / MCP: `ai-dq-mcp` 流用 or 新規 `<app>`）
+- [ ] ディレクトリを決める（RAG: `ai-dq` 流用 / MCP(Lambda): `ai-dq-mcp` 流用 / MCP(常駐): `catalog-agent` 流用 or 新規 `<app>`）
 - [ ] （RAG）`config/apps/<app>.toml` を作成（① ロジック）
 - [ ] （RAG）`FUNCTION_NAME=<app>-local APP_PARAM_FILE=<app>.toml` で `deploy.sh`（② デプロイ）
-- [ ] （MCP）`FUNCTION_NAME=mcp-local` で `deploy-mcp.sh`（② デプロイ）
-- [ ] `API_ID=<app>api` で `common/localstack/deploy-apigw.sh`（② 公開）
-- [ ] Lambda 単体で動作確認（手順4）
+- [ ] （MCP/Lambda）`FUNCTION_NAME=mcp-local` で `deploy-mcp.sh`（② デプロイ）
+- [ ] （MCP/常駐）`docker build` + `genai-net` でコンテナ起動（② デプロイ・API Gateway 不要）
+- [ ] （Lambda 型のみ）`API_ID=<app>api` で `common/localstack/deploy-apigw.sh`（② 公開）
+- [ ] 動作確認（Lambda 型: 手順4 / 常駐型: `curl http://localhost:8002/mcp`）
 - [ ] `exapps-proxy/apps.json` に exAppId エントリ追加（③ 画面）
 - [ ] `docker compose restart exapps-proxy`
 - [ ] ブラウザ `/apps/任意UUID/<exAppId>` で確認
@@ -357,5 +434,6 @@ VITE_APP_GOVAIS_FOR_HOMEPAGE=[{"title":"...","teamId":"00000000-0000-0000-0000-0
 | 実行が 400 / メモリ不足 | LM Studio のモデルが大きすぎる。3B〜7B級に変更 |
 | `Task timed out` | `LAMBDA_TIMEOUT`(既定900秒)を確認。ローカルLLMは低速 |
 | `deploy-apigw.sh が見つからない` | 共有スクリプトは `common/localstack/` に移動済み。`bash ../../common/localstack/deploy-apigw.sh` で呼ぶ |
-| MCP が応答しない | `API_ID=mcpapi FUNCTION_NAME=mcp-local` で公開したか確認。詳細は `ai-dq-mcp/localstack/README.md` |
+| MCP が応答しない | （Lambda）`API_ID=mcpapi FUNCTION_NAME=mcp-local` で公開したか確認。詳細は `ai-dq-mcp/localstack/README.md` |
+| catalog-agent が応答しない | コンテナが `genai-net` 上に起動し `:8002` を公開しているか確認。`curl http://localhost:8002/health`。詳細は `catalog-agent/README.md` |
 | ホーム画面にアプリが出ない/古い | `build-apps-json.sh` を再実行して `govais.generated.env` を更新し、`docker compose up -d --force-recreate genai-web` で作り直す。`docker-compose.yaml` の `environment` に `VITE_APP_GOVAIS_FOR_HOMEPAGE` を書くと env_file が上書きされるので書かない |
