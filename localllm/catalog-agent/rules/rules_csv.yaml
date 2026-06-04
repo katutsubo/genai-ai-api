@@ -1,0 +1,56 @@
+rules:
+  - id: STR-001
+    name: required_columns
+    type: structure
+    severity: error
+    params:
+      columns: []  # 必須カラム名リスト
+
+  - id: STR-002
+    name: column_name_format
+    type: structure
+    severity: warning
+    params:
+      pattern: "^[a-z][a-z0-9_]{0,63}$"  # snake_case, 64文字以内
+
+  - id: TYP-001
+    name: date_column_format
+    type: data_type
+    severity: error
+    params:
+      suffix:
+        - "_date"
+        - "_at"
+        - "_on"
+      format: "YYYY-MM-DD"
+
+  - id: TYP-002
+    name: numeric_column_type
+    type: data_type
+    severity: warning
+    params:
+      suffix:
+        - "_id"
+        - "_count"
+        - "_amount"
+
+  - id: INT-001
+    name: not_null_columns
+    type: integrity
+    severity: error
+    params:
+      columns: []  # NOT NULL 必須カラム名リスト
+
+  - id: INT-002
+    name: unique_columns
+    type: integrity
+    severity: warning
+    params:
+      columns: []  # ユニーク制約カラム名リスト
+
+  - id: INT-003
+    name: encoding_check
+    type: integrity
+    severity: info
+    params:
+      expected: "utf-8"
