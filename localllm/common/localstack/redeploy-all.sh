@@ -39,10 +39,10 @@ BUILD_APPS="${SCRIPT_DIR}/build-apps-json.sh"
 
 # ---- 共通設定(環境変数で上書き可) ----
 export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://localhost:4566}"
-export LMSTUDIO_BASE_URL="${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}"
-export LMSTUDIO_API_KEY="${LMSTUDIO_API_KEY:-lm-studio}"
-export LMSTUDIO_CHAT_MODEL="${LMSTUDIO_CHAT_MODEL:-}"
-export LMSTUDIO_EMBEDDING_MODEL="${LMSTUDIO_EMBEDDING_MODEL:-}"
+export LMSTUDIO_BASE_URL="${LMSTUDIO_BASE_URL:-http://litellm:4000/v1}"
+export LMSTUDIO_API_KEY="${LMSTUDIO_API_KEY:-sk-localdummy}"
+export LMSTUDIO_CHAT_MODEL="${LMSTUDIO_CHAT_MODEL:-chat}"
+export LMSTUDIO_EMBEDDING_MODEL="${LMSTUDIO_EMBEDDING_MODEL:-embed}"
 
 # ---- exapps-proxy 用 apps.generated.json を生成 ----
 # 各アプリの localllm/<app>/exapp.json を集約する。jq が無い等で失敗しても
