@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Data Quality &amp; Catalog Agent</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #333; }
+    section { margin-bottom: 2rem; padding: 1rem; border: 1px solid #ddd; border-radius: 6px; }
+    label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 0.4rem; margin-bottom: 0.5rem; }
+    button { padding: 0.5rem 1.2rem; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:disabled { background: #aaa; }
+    #status { margin-top: 1rem; color: #666; font-style: italic; }
+    pre { background: #f4f4f4; padding: 1rem; overflow: auto; font-size: 0.85rem; max-height: 300px; }
+    .pass { color: green; } .fail { color: red; } .warn { color: orange; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+    th, td { border: 1px solid #ccc; padding: 0.3rem 0.5rem; text-align: left; }
+    th { background: #eee; }
+    a { color: #0066cc; }
+    .verdict-improved { color: green; font-weight: bold; }
+    .verdict-same { color: orange; }
+    .verdict-degraded { color: red; }
+  </style>
+</head>
+<body>
+  <h1>AI Data Quality &amp; Catalog Agent</h1>
+
+  <section id="upload-section">
+    <label for="csv-file">CSV ファイルをアップロード</label>
+    <input type="file" id="csv-file" accept=".csv" />
+    <label for="questions-input">Text-to-SQL 質問（省略可、1行1質問）</label>
+    <textarea id="questions-input" rows="3" placeholder="例: 人口が最も多い地域は？"></textarea>
+    <button id="analyze-btn" onclick="analyze()">分析開始</button>
+    <div id="status"></div>
+  </section>
+
+  <section id="check-section" style="display:none">
+    <h2>品質チェック結果</h2>
+    <div id="check-results"></div>
+  </section>
+
+  <section id="catalog-section" style="display:none">
+    <h2>データカタログ成果物</h2>
+    <div id="catalog-outputs"></div>
+  </section>
+
+  <section id="textsql-section" style="display:none">
+    <h2>Text-to-SQL 比較</h2>
+    <div id="textsql-results"></div>
+  </section>
+
+  <script>
+    async function analyze() {
+      const fileInput = document.getElementById('csv-file');
+      const questionsInput = document.getElementById('questions-input').value.trim();
+      const btn = document.getElementById('analyze-btn');
+      const status = document.getElementById('status');
+
+      if (!fileInput.files[0]) { alert('CSV ファイルを選択してください'); return; }
+
+      btn.disabled = true;
+      status.textContent = '分析中...';
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      if (questionsInput) {
+        const lines = questionsInput.split('\n').map(l => l.trim()).filter(l => l);
+        formData.append('questions', JSON.stringify(lines));
+      }
+
+      try {
+        const resp = await fetch('/analyze', { method: 'POST', body: formData });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          status.textContent = 'エラー: ' + (err.detail || resp.statusText);
+          return;
+        }
+        const data = await resp.json();
+        renderResults(data);
+        status.textContent = '分析完了';
+      } catch (e) {
+        status.textContent = 'エラー: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderResults(data) {
+      renderCheckResults(data.check_results || []);
+      renderCatalogOutputs(data.catalog_outputs || {});
+      renderTextsql(data.textsql_comparison || []);
+    }
+
+    function renderCheckResults(results) {
+      const section = document.getElementById('check-section');
+      const container = document.getElementById('check-results');
+      if (!results.length) { section.style.display = 'none'; return; }
+
+      const rows = results.map(r => {
+        const cls = r.passed ? 'pass' : (r.severity === 'warning' ? 'warn' : 'fail');
+        const icon = r.passed ? '✓' : '✗';
+        return `<tr><td class="${cls}">${icon}</td><td>${r.rule_id}</td><td>${r.severity}</td><td>${r.message}</td><td>${r.location}</td></tr>`;
+      }).join('');
+      container.innerHTML = `<table><tr><th></th><th>ルールID</th><th>重要度</th><th>メッセージ</th><th>場所</th></tr>${rows}</table>`;
+      section.style.display = 'block';
+    }
+
+    function renderCatalogOutputs(outputs) {
+      const section = document.getElementById('catalog-section');
+      const container = document.getElementById('catalog-outputs');
+      const tables = Object.entries(outputs);
+      if (!tables.length) { section.style.display = 'none'; return; }
+
+      const html = tables.map(([table, files]) => {
+        const links = Object.entries(files).map(([key, path]) => {
+          const parts = path.split('/');
+          const filename = parts[parts.length - 1];
+          const tablePart = parts[parts.length - 2];
+          return `<li><a href="/outputs/${tablePart}/${filename}" target="_blank">${key}: ${filename}</a></li>`;
+        }).join('');
+        return `<h3>${table}</h3><ul>${links}</ul>`;
+      }).join('');
+      container.innerHTML = html;
+      section.style.display = 'block';
+    }
+
+    function renderTextsql(comparisons) {
+      const section = document.getElementById('textsql-section');
+      const container = document.getElementById('textsql-results');
+      if (!comparisons.length) { section.style.display = 'none'; return; }
+
+      const html = comparisons.map((c, i) => {
+        const cls = `verdict-${c.verdict}`;
+        return `
+          <div style="margin-bottom:1.5rem; padding:1rem; border:1px solid #eee; border-radius:4px">
+            <strong>Q${i+1}: ${c.question}</strong>
+            <span class="${cls}" style="margin-left:1rem">${c.verdict.toUpperCase()}</span>
+            <table style="margin-top:0.5rem">
+              <tr><th></th><th>SQL</th><th>正確性</th><th>可読性</th></tr>
+              <tr><td>Before</td><td><code>${escHtml(c.sql_before)}</code></td>
+                <td>${c.score_before?.correctness ?? '-'}</td><td>${c.score_before?.readability ?? '-'}</td></tr>
+              <tr><td>After</td><td><code>${escHtml(c.sql_after)}</code></td>
+                <td>${c.score_after?.correctness ?? '-'}</td><td>${c.score_after?.readability ?? '-'}</td></tr>
+            </table>
+          </div>`;
+      }).join('');
+      container.innerHTML = html;
+      section.style.display = 'block';
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>
