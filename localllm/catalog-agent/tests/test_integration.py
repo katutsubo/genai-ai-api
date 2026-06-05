@@ -94,7 +94,12 @@ async def test_full_pipeline_mock_llm(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_root_serves_html():
+async def test_get_root_returns_service_info():
+    """HTML フロントエンドは廃止。ルートはサービス情報 JSON を返す。"""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")
     assert response.status_code == 200
+    data = response.json()
+    assert data["service"] == "catalog-agent"
+    assert "process_file" in data["tools"]
+    assert data["mcp_endpoint"] == "/mcp"

@@ -10,7 +10,6 @@ from agent.logging_config import get_logger, setup_logging
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 setup_logging()
 logger = get_logger(__name__)
@@ -35,6 +34,10 @@ MCP_SERVER_VERSION = os.environ.get("MCP_SERVER_VERSION", "0.1.0")
 # - analyze_csv : CSV(base64) を受け取り、解析結果を JSON 文字列で返す（プログラム連携向け）。
 # - process_file: exapps-proxy の mode=mcp_file が呼ぶ標準ツール。
 #                 同じく CSV(base64) を受け取り、結果を人間可読な Markdown で返す。
+#
+# 源内アプリ（genai-web）からは exapps-proxy 経由で process_file が呼ばれる。
+# 画面（フォーム）は localllm/catalog-agent/exapp.json の placeholder で定義し、
+# 本サービスは HTML を一切配信しない（MCP/REST バックエンドに専念する）。
 MCP_TOOLS = [
     {
         "name": "analyze_csv",
@@ -99,6 +102,18 @@ def _serialize_default(obj):
 
 def _result_to_jsonable(result) -> dict:
     return json.loads(json.dumps(asdict(result), default=_serialize_default))
+
+
+@app.get("/")
+async def root():
+    """サービス情報を返す（HTML フロントエンドは廃止。画面は exapp.json で定義）。"""
+    return {
+        "service": "catalog-agent",
+        "version": app.version,
+        "ui": "genai-web (exapp.json placeholder)",
+        "mcp_endpoint": "/mcp",
+        "tools": [t["name"] for t in MCP_TOOLS],
+    }
 
 
 @app.get("/health")
@@ -349,9 +364,3 @@ async def mcp_endpoint(request: Request):
     if response is None:
         return Response(status_code=202)
     return JSONResponse(content=response)
-
-
-# Serve frontend (マウントは API ルート登録の後に行う)
-_frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
-if os.path.isdir(_frontend_dir):
-    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")

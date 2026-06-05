@@ -73,7 +73,7 @@
   "A7C3E2D1-4B5F-46A8-9C0D-2E3F4A5B6C7D": {
     "exAppName": "データ品質＆カタログエージェント（ローカル）",
     "description": "CSV をアップロードすると、品質チェックとデータカタログ生成を実行する MCP エージェントです。",
-    "howToUse": "## 概要\nCSV ファイルを添付して実行すると、catalog-agent コンテナの MCP ツール `process_file` が呼ばれ、以下を実行します。\n\n- **品質チェック**: カラム名・型・欠損・ユニーク制約・エンコーディングなどのルールチェック\n- **データカタログ生成**: DataHub(JSON-LD) / OpenMetadata(YAML) / セマンティックビュー / マテリアライズドビュー / catalog.md\n\n## 使い方\n1. CSV ファイルを添付します。\n2. 実行すると、品質チェック結果と生成されたカタログ成果物の概要が Markdown で表示されます。\n\n## 補足\n- データカタログ生成には LM Studio (litellm 経由) が必要です。LLM が利用できない場合も品質チェックは実行されます。\n- 本エージェントは catalog-agent コンテナ (genai-net, port 8002) の /mcp を MCP サーバとして参照します。",
+    "howToUse": "## 概要\nCSV ファイルを添付して実行すると、catalog-agent コンテナの MCP ツール `process_file` が呼ばれ、以下を実行します。\n\n- **品質チェック**: カラム名・型・欠損・ユニーク制約・エンコーディングなどのルールチェック\n- **データカタログ生成**: DataHub(JSON-LD) / OpenMetadata(YAML) / セマンティックビュー / マテリアライズドビュー / catalog.md\n\n## 使い方\n1. CSV ファイルを添付します。\n2. 実行すると、品質チェック結果と生成されたカタログ成果物の概要が Markdown で表示されます。\n\n## 補足\n- データカタログ生成には LM Studio (litellm 経由) が必要です。LLM が利用できない場合も品質チェックは実行されます。\n- 本アプリは API Gateway / Lambda を経由せず、catalog-agent コンテナ (genai-net, port 8002) の `/mcp` を MCP サーバとして直接参照します。",
     "mode": "mcp_file",
     "mcpApiUrl": "http://catalog-agent:8002/mcp",
     "placeholder": {
