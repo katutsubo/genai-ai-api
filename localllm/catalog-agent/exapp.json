@@ -1,35 +1,15 @@
 {
   "A7C3E2D1-4B5F-46A8-9C0D-2E3F4A5B6C7D": {
     "exAppName": "データ品質＆カタログエージェント（ローカル）",
-    "description": "CSV をアップロードすると、品質チェック・データカタログ生成・Text-to-SQL 品質比較を実行する MCP エージェントです。",
-    "howToUse": "## 概要\nCSV ファイルを添付すると、catalog-agent コンテナの MCP ツール `analyze_csv` が呼ばれ、以下を実行します。\n\n- **品質チェック**: カラム名・型・欠損・エンコーディングなどのルールチェック\n- **データカタログ生成**: DataHub(JSON-LD) / OpenMetadata(YAML) / セマンティックビュー / マテリアライズドビュー / catalog.md\n- **Text-to-SQL 比較**: 質問を入力すると、カタログ適用前/後の SQL 生成品質を比較\n\n## 使い方\n1. CSV ファイルを添付します。\n2. 任意で Text-to-SQL 用の質問を入力します（1行1質問）。\n3. 実行すると、品質チェック結果・生成されたカタログ・Text-to-SQL 比較が JSON で返ります。\n\n## 補足\n- データカタログ生成と Text-to-SQL は LM Studio (litellm 経由) が必要です。LLM が利用できない場合も品質チェックは実行されます。\n- 本エージェントは catalog-agent コンテナ (genai-net, port 8002) の /mcp を MCP サーバとして参照します。",
-    "mode": "mcp_agent",
-    "mcpServers": {
-      "catalog": {
-        "name": "カタログエージェントMCP",
-        "url": "http://catalog-agent:8002/mcp",
-        "description": "catalog-agent コンテナが提供する MCP サーバ。analyze_csv ツールを提供します。"
-      }
-    },
+    "description": "CSV をアップロードすると、品質チェックとデータカタログ生成を実行する MCP エージェントです。",
+    "howToUse": "## 概要\nCSV ファイルを添付して実行すると、catalog-agent コンテナの MCP ツール `process_file` が呼ばれ、以下を実行します。\n\n- **品質チェック**: カラム名・型・欠損・ユニーク制約・エンコーディングなどのルールチェック\n- **データカタログ生成**: DataHub(JSON-LD) / OpenMetadata(YAML) / セマンティックビュー / マテリアライズドビュー / catalog.md\n\n## 使い方\n1. CSV ファイルを添付します。\n2. 実行すると、品質チェック結果と生成されたカタログ成果物の概要が Markdown で表示されます。\n\n## 補足\n- データカタログ生成には LM Studio (litellm 経由) が必要です。LLM が利用できない場合も品質チェックは実行されます。\n- 本エージェントは catalog-agent コンテナ (genai-net, port 8002) の /mcp を MCP サーバとして参照します。",
+    "mode": "mcp_file",
+    "mcpApiUrl": "http://catalog-agent:8002/mcp",
     "placeholder": {
-      "prompt": {
-        "type": "textarea",
-        "title": "Text-to-SQL 質問（任意）",
-        "desc": "1行1質問で入力してください。例: 人口が最も多い地域は？ 空の場合は品質チェックとカタログ生成のみ実行します。",
-        "required": false,
-        "max_length": 2000
-      },
-      "model": {
-        "type": "select",
-        "title": "モデル",
-        "desc": "使用するローカルLLMモデル（LM Studioから自動取得）",
-        "items_source": "models",
-        "required": false
-      },
       "file": {
         "type": "file",
         "title": "CSV ファイル",
-        "desc": "品質チェック・カタログ生成・Text-to-SQL の対象となる CSV を添付してください",
+        "desc": "品質チェック・カタログ生成の対象となる CSV を添付してください",
         "required": true,
         "accept": ".csv,text/csv",
         "max_size": "5MB",
