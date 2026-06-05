@@ -1,4 +1,3 @@
-from __future__ import annotations
 import os
 import re
 from queue import Queue
@@ -140,6 +139,7 @@ def retrieve_kb_and_rating(
     result_queue: Queue,
     usage_tracker: BedrockUsageTracker | None = None,
     metadata_filters: list[dict] | None = None,
+    model_override: str | None = None,
 ):
     """
     個別のクエリを処理する関数
@@ -151,8 +151,13 @@ def retrieve_kb_and_rating(
         result_queue: 結果を格納するキュー
         usage_tracker: 使用状況を追跡するトラッカー (オプション)
         metadata_filters: メタデータフィルタのリスト (オプション)
+        model_override: 画面で選択されたモデルID。指定時は設定ファイルの modelId より優先する。
     """
     try:
+        # 使用モデルID（画面選択があれば優先）
+        rag_model_id = model_override or retrieve_generate_config.get_model_id()
+        rating_model_id = model_override or rating_config.get_model_id()
+
         retrieval_configuration = {
             "vectorSearchConfiguration": {
                 "numberOfResults": KB_NUM_RESULTS,
@@ -172,7 +177,7 @@ def retrieve_kb_and_rating(
                         },
                     },
                     "knowledgeBaseId": KNOWLEDGE_BASE_ID,
-                    "modelArn": build_model_arn(retrieve_generate_config.get_model_id()),
+                    "modelArn": build_model_arn(rag_model_id),
                     "retrievalConfiguration": retrieval_configuration,
                 },
             },
@@ -200,7 +205,7 @@ def retrieve_kb_and_rating(
 
         # Knowledge Baseからの出力がユーザーの質問とどれだけ関連があるか評価
         converse_response = bedrock_runtime.converse(
-            modelId=rating_config.get_model_id(),
+            modelId=rating_model_id,
             messages=[{"role": "user", "content": [{"text": placeholder_replaced_prompt}]}],
             inferenceConfig=rating_config.get_inference_config(),
         )
@@ -213,7 +218,7 @@ def retrieve_kb_and_rating(
 
         # usage_trackerが渡されていれば記録
         if usage_tracker and "usage" in converse_response:
-            usage_tracker.add_usage(rating_config.get_model_id(), converse_response["usage"])
+            usage_tracker.add_usage(rating_model_id, converse_response["usage"])
 
         kb_response = map_rating(converse_resp_text, kb_response)
 
@@ -230,6 +235,7 @@ def invoke_retrives(
     queries: list[str],
     usage_tracker: BedrockUsageTracker | None = None,
     metadata_filters: list[dict] | None = None,
+    model_override: str | None = None,
 ) -> KBResponse:
     """
     複数のクエリを並列で処理する関数
@@ -239,6 +245,7 @@ def invoke_retrives(
         queries: 拡張されたクエリのリスト
         usage_tracker: 使用状況を追跡するトラッカー (オプション)
         metadata_filters: メタデータフィルタのリスト (オプション)
+        model_override: 画面で選択されたモデルID。指定時は設定ファイルの modelId より優先する。
 
     Returns:
         集約されたKnowledge Base応答
@@ -248,7 +255,8 @@ def invoke_retrives(
 
     for query in queries:
         thread = Thread(
-            target=retrieve_kb_and_rating, args=(user_question, query, result_queue, usage_tracker, metadata_filters)
+            target=retrieve_kb_and_rating,
+            args=(user_question, query, result_queue, usage_tracker, metadata_filters, model_override),
         )
         threads.append(thread)
         thread.start()

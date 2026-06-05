@@ -3,8 +3,9 @@
 ユーザーの質問から検索用の複数のクエリを生成する
 
 更新: usage_trackerを追加し、API使用状況を追跡
+更新: model_override を追加し、画面で選択されたモデルを優先使用
 """
-from __future__ import annotations
+
 import json
 import re
 from typing import TYPE_CHECKING, Any
@@ -27,6 +28,7 @@ def expand_query(
     n_queries: int = 3,
     file_content_blocks: list[dict[str, Any]] | None = None,
     usage_tracker: BedrockUsageTracker | None = None,
+    model_override: str | None = None,
 ) -> list[str]:
     """
     クエリ拡張を実行
@@ -36,6 +38,7 @@ def expand_query(
         n_queries: 生成するクエリの数
         file_content_blocks: 添付ファイルのコンテンツブロック (オプション)
         usage_tracker: 使用状況を追跡するトラッカー (オプション)
+        model_override: 画面で選択されたモデルID。指定時は設定ファイルの modelId より優先する。
 
     Returns:
         生成されたクエリのリスト
@@ -53,9 +56,9 @@ def expand_query(
         # プロンプトにプレースホルダを適用
         prompt = replacePlaceholders(system_prompt, {"question": question, "n_queries": str(n_queries)})
 
-        # モデルID取得
-        model_id = config.get_model_id()
-        logger.debug(f"Using model: {model_id}")
+        # モデルID取得（画面選択があれば優先）
+        model_id = model_override or config.get_model_id()
+        logger.debug(f"Using model: {model_id} (override={bool(model_override)})")
 
         # 推論設定取得
         inference_config = config.get_inference_config()

@@ -103,6 +103,17 @@ def parse_input(event):
     user_tag = user_tag.strip() if user_tag else ""
     logger.debug(f"User specified tag: {user_tag}")
 
+    # ユーザーが指定したモデル（画面のモデル選択）を取得（オプション）
+    #   - 指定があれば各推論呼び出しの modelId をこの値で上書きする。
+    #   - 未指定/空文字の場合は None とし、従来どおり設定ファイル(TOML)の modelId を使う。
+    user_model = inputs.get("model")
+    if user_model is not None and not isinstance(user_model, str):
+        raise ValueError("model must be a string")
+    user_model = user_model.strip() if isinstance(user_model, str) else None
+    if not user_model:
+        user_model = None
+    logger.debug(f"User specified model: {user_model}")
+
     return (
         user_question,
         n_queries,
@@ -111,6 +122,7 @@ def parse_input(event):
         file_content_blocks,
         system_prompt_override,
         user_tag,
+        user_model,
     )
 
 
@@ -147,7 +159,11 @@ def handler(event, context):
             file_content_blocks,
             system_prompt_override,
             user_tag,
+            user_model,
         ) = parse_input(event)
+
+        if user_model:
+            logger.info(f"Model override requested by user: {user_model}")
 
         # メタデータフィルタの生成
         metadata_filters = generate_metadata_filters(user_tag)
@@ -158,14 +174,26 @@ def handler(event, context):
             logger.info(f"Processing request with {len(file_content_blocks)} file attachments")
 
         # クエリ拡張を実行（添付ファイルとusage_trackerを渡す）
-        queries = expand_query(user_question, n_queries, file_content_blocks, usage_tracker)
+        queries = expand_query(
+            user_question,
+            n_queries,
+            file_content_blocks,
+            usage_tracker,
+            model_override=user_model,
+        )
         logger.debug(f"Expanded Queries: {queries}")
 
         # Knowledge Base からのretrieveとgenerateを実行し、LLMで評価する並列処理を実行
         # 注: kb_retrieve_and_rating.pyは現在、添付ファイルをサポートしていません
         # Knowledge Baseの検索に添付ファイルを統合する場合は、将来的に拡張が必要です
         logger.info("Knowledge base retrieve and relevance rating started")
-        kb_responses_and_ratings = invoke_retrives(user_question, queries, usage_tracker, metadata_filters)
+        kb_responses_and_ratings = invoke_retrives(
+            user_question,
+            queries,
+            usage_tracker,
+            metadata_filters,
+            model_override=user_model,
+        )
         logger.debug(f"kb_responses_and_ratings: {kb_responses_and_ratings}")
 
         # Knowledge Base から収集した関連情報をcontextして付与し回答を生成（添付ファイルとusage_trackerを渡す）
@@ -177,6 +205,7 @@ def handler(event, context):
             file_content_blocks,
             system_prompt_override,
             usage_tracker,
+            model_override=user_model,
         )
 
         # 引用セクションを追加

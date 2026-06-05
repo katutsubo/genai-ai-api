@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from aws_lambda_powertools import Logger
@@ -22,6 +21,7 @@ def generate_answer(
     file_content_blocks: list[dict[str, Any]] | None = None,
     system_prompt_override: str | None = None,
     usage_tracker: BedrockUsageTracker | None = None,
+    model_override: str | None = None,
 ) -> str:
     citations_texts = [citation.text for citation in kb_response.citations]
     logger.debug(f"Answer generation, citations texts: {citations_texts}")
@@ -51,9 +51,9 @@ def generate_answer(
         },
     )
 
-    # モデルID取得
-    model_id = config.get_model_id()
-    logger.debug(f"Using model: {model_id}")
+    # モデルID取得（画面選択があれば優先）
+    model_id = model_override or config.get_model_id()
+    logger.debug(f"Using model: {model_id} (override={bool(model_override)})")
 
     # 推論設定取得
     inference_config = config.get_inference_config()
