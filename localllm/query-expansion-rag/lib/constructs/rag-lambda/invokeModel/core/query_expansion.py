@@ -5,6 +5,7 @@
 更新: usage_trackerを追加し、API使用状況を追跡
 更新: model_override を追加し、画面で選択されたモデルを優先使用
 """
+from __future__ import annotations
 
 import json
 import re
@@ -17,6 +18,7 @@ from utils.utils import handleException, replacePlaceholders
 
 if TYPE_CHECKING:
     from services.bedrock_usage_tracker import BedrockUsageTracker
+
 
 # Set logger
 SERVICE_NAME = "query-expansion-rag-lambda"

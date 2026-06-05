@@ -54,8 +54,25 @@ echo "[1/5] Cleaning build dir..."
 rm -rf "${BUILD_DIR}" "${ZIP_FILE}"
 mkdir -p "${BUILD_DIR}"
 
+
 echo "[2/5] Installing dependencies and copying source..."
-pip install -r "${LAMBDA_SRC}/requirements.txt" -t "${BUILD_DIR}" --quiet
+# pip 実行コマンドを解決する（pip → pip3 → python3 -m pip → python -m pip）
+if command -v pip >/dev/null 2>&1; then
+  PIP="pip"
+elif command -v pip3 >/dev/null 2>&1; then
+  PIP="pip3"
+elif command -v python3 >/dev/null 2>&1 && python3 -m pip --version >/dev/null 2>&1; then
+  PIP="python3 -m pip"
+elif command -v python >/dev/null 2>&1 && python -m pip --version >/dev/null 2>&1; then
+  PIP="python -m pip"
+else
+  echo "ERROR: pip が見つかりません。Python と pip をインストールしてください。" >&2
+  echo "       例: brew install python  /  python3 -m ensurepip --upgrade" >&2
+  exit 1
+fi
+echo "      using pip: ${PIP}"
+
+${PIP} install -r "${LAMBDA_SRC}/requirements.txt" -t "${BUILD_DIR}" --quiet
 cp -a "${LAMBDA_SRC}/." "${BUILD_DIR}/"
 
 # config/defaults と config/apps を同梱 (本番ビルドと同様の配置)

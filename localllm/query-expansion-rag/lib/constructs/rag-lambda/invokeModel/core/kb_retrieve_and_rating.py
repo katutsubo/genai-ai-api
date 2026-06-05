@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import re
 from queue import Queue
@@ -12,6 +14,8 @@ from utils.utils import convertToArray, handleException, replacePlaceholders
 
 if TYPE_CHECKING:
     from services.bedrock_usage_tracker import BedrockUsageTracker
+
+
 
 # Constants
 KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
