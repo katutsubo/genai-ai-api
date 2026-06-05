@@ -12,6 +12,8 @@ USE_LOCAL_LLM=true のとき、`services.aws_clients` がこのモジュール�
   (環境変数で明示指定された場合はそちらを優先)。
 - Bedrock 固有のモデルID (anthropic.* / amazon.* / jp.* など) が渡されても
   無視し、LMStudio で実際に利用可能なモデルへ置き換える。
+- ただし呼び出し側 (画面のモデル選択) が LMStudio の実在モデル名
+  (例: qwen3.5-9b-mtp) を渡した場合は、それを最優先で使用する。
 
 主な環境変数:
 - LMSTUDIO_BASE_URL       : 例 http://host.docker.internal:1234/v1 (既定)
@@ -104,13 +106,50 @@ def _looks_like_embedding(model_id: str) -> bool:
     return any(token in lowered for token in ("embed", "bge", "e5", "gte"))
 
 
-def resolve_chat_model() -> str:
-    """chat 用モデルIDを解決する。"""
+def _is_bedrock_model_id(model_id: str) -> bool:
+    """Bedrock 固有のモデルID (anthropic.* / amazon.* / jp.* 等) かどうかを判定する。
+
+    これらは LMStudio には存在しないため、無視して resolve_chat_model() の
+    自動解決に委ねる。逆に LMStudio のローカルモデル名
+    (例: qwen3.5-9b-mtp) はそのまま使う。
+    """
+    lowered = (model_id or "").lower()
+    bedrock_prefixes = (
+        "anthropic.",
+        "amazon.",
+        "cohere.",
+        "meta.",
+        "mistral.",
+        "ai21.",
+        "us.",
+        "eu.",
+        "jp.",
+        "apac.",
+        "global.",
+    )
+    return lowered.startswith(bedrock_prefixes)
+
+
+def resolve_chat_model(requested_model_id: str | None = None) -> str:
+    """chat 用モデルIDを解決する。
+
+    優先順位:
+      1. 呼び出し側 (画面のモデル選択) から渡された requested_model_id
+         (Bedrock固有IDでない実在モデル名) を最優先で使用する。
+      2. 環境変数 LMSTUDIO_CHAT_MODEL (運用上の固定指定)。
+      3. LMStudio の /v1/models から embedding 以外を自動選択。
+    """
+    # 1. 呼び出し側が具体的なローカルモデル名を指定していれば最優先で尊重する
+    if requested_model_id and not _is_bedrock_model_id(requested_model_id):
+        return requested_model_id
+
+    # 2. 環境変数による固定指定
     explicit = os.environ.get("LMSTUDIO_CHAT_MODEL")
     if explicit:
         return explicit
+
+    # 3. /v1/models から embedding っぽくないモデルを優先選択
     ids = list_models()
-    # embedding っぽくないモデルを優先
     for mid in ids:
         if not _looks_like_embedding(mid):
             return mid
@@ -221,10 +260,13 @@ class LMStudioBedrockRuntime:
         system: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        # Bedrock の modelId は無視し、LMStudio のモデルへ解決する
-        model = resolve_chat_model()
+        # 画面で選択された modelId が LMStudio の実在モデル名なら尊重し、
+        # Bedrock 固有ID (anthropic.* 等) の場合のみ自動解決へフォールバックする。
+        model = resolve_chat_model(modelId)
         if modelId and modelId != model:
-            logger.debug(f"Overriding Bedrock modelId '{modelId}' -> LMStudio model '{model}'")
+            logger.debug(f"Requested modelId '{modelId}' -> using LMStudio model '{model}'")
+        else:
+            logger.debug(f"Using LMStudio model '{model}'")
 
         payload: dict[str, Any] = {
             "model": model,
@@ -304,6 +346,13 @@ class LMStudioBedrockAgentRuntime:
             retrieval_config.get("vectorSearchConfiguration", {}).get("numberOfResults", 5)
         )
 
+        # 画面で選択された modelId を取り出し、生成時に尊重する
+        # (modelArn 末尾の foundation-model/<id> または inference-profile/<id> から抽出)
+        requested_model_id = None
+        model_arn = kb_config.get("modelArn")
+        if isinstance(model_arn, str) and model_arn:
+            requested_model_id = model_arn.split("/")[-1]
+
         docs = _load_local_documents()
         top_docs: list[dict[str, Any]] = []
         if docs:
@@ -335,7 +384,7 @@ class LMStudioBedrockAgentRuntime:
 
         runtime = LMStudioBedrockRuntime()
         converse_resp = runtime.converse(
-            modelId=None,
+            modelId=requested_model_id,
             messages=[{"role": "user", "content": [{"text": user_text}]}],
             inferenceConfig={"temperature": 0, "maxTokens": 2048},
         )
