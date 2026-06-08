@@ -2,9 +2,12 @@ import base64
 import binascii
 import json
 import os
+import re
+import shutil
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
+from urllib.parse import quote
 
 from agent.logging_config import get_logger, setup_logging
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -152,33 +155,85 @@ async def analyze(
                 status_code=422, detail="questions は JSON 配列である必要があります"
             )
 
-    result = await _run_analysis(content, parsed_questions, suffix=".csv")
+    result = await _run_analysis(content, parsed_questions, suffix=".csv", filename=filename)
     return _result_to_jsonable(result)
 
+def _safe_table_name(filename: str | None, suffix: str = ".csv") -> str:
+    """元ファイル名から安全なテーブル名(=出力ディレクトリ名)を作る。"""
+    stem = os.path.splitext(os.path.basename(filename or ""))[0]
+    # 英数字 / ハイフン / アンダースコア / ドット / 日本語以外は _ に置換
+    stem = re.sub(r"[^\w\-.]", "_", stem, flags=re.UNICODE).strip("._")
+    return stem or "upload"
 
-async def _run_analysis(content: bytes, questions, suffix: str = ".csv", model: str | None = None):
-    """Write bytes to a temp file, run the orchestrator, and return the AgentResult."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+async def _run_analysis(content: bytes, questions, suffix: str = ".csv", filename: str | None = None):
+    """Write bytes to a temp file (keeping a meaningful name) and run the orchestrator."""
+    tmp_dir = tempfile.mkdtemp()
+    safe_name = _safe_table_name(filename, suffix) + suffix
+    tmp_path = os.path.join(tmp_dir, safe_name)
+    with open(tmp_path, "wb") as f:
+        f.write(content)
 
     try:
         from agent.orchestrator import Orchestrator
 
-        orchestrator = Orchestrator(model=model)
+        orchestrator = Orchestrator()
         return await orchestrator.run(tmp_path, questions)
     finally:
-        os.unlink(tmp_path)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.get("/outputs/{table_name}")
+async def list_outputs(table_name: str):
+    """指定テーブルの生成済み成果物ファイル一覧を返す（ダウンロードUI用）。"""
+    from agent.config import config
+
+    if "/" in table_name or "\\" in table_name or table_name in ("", ".", ".."):
+        raise HTTPException(status_code=400, detail="不正なパスです")
+
+    base_dir = os.path.realpath(os.path.join(config.OUTPUT_DIR, "catalog"))
+    table_dir = os.path.realpath(os.path.join(base_dir, table_name))
+    if not table_dir.startswith(base_dir + os.sep) or not os.path.isdir(table_dir):
+        raise HTTPException(status_code=404, detail="テーブルが存在しません")
+
+    base = config.PUBLIC_BASE_URL.rstrip("/")
+    files = []
+    for fname in sorted(os.listdir(table_dir)):
+        fpath = os.path.join(table_dir, fname)
+        if os.path.isfile(fpath):
+            files.append(
+                {
+                    "filename": fname,
+                    "size_bytes": os.path.getsize(fpath),
+                    "download_url": f"{base}/outputs/{quote(table_name)}/{quote(fname)}",
+                }
+            )
+    return {"table_name": table_name, "files": files}
 
 
 @app.get("/outputs/{table_name}/{filename}")
 async def get_output(table_name: str, filename: str):
+    """生成済み成果物を1ファイル返す。Content-Disposition: attachment でダウンロードさせる。"""
     from agent.config import config
 
-    file_path = os.path.join(config.OUTPUT_DIR, "catalog", table_name, filename)
-    if not os.path.exists(file_path):
+    # パストラバーサル対策: サブディレクトリ区切り/親参照を禁止
+    for part in (table_name, filename):
+        if "/" in part or "\\" in part or part in ("", ".", ".."):
+            raise HTTPException(status_code=400, detail="不正なパスです")
+
+    base_dir = os.path.realpath(os.path.join(config.OUTPUT_DIR, "catalog"))
+    file_path = os.path.realpath(os.path.join(base_dir, table_name, filename))
+    # 解決後パスが base_dir 配下であることを保証
+    if not file_path.startswith(base_dir + os.sep):
+        raise HTTPException(status_code=400, detail="不正なパスです")
+    if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="ファイルが存在しません")
-    return FileResponse(file_path)
+
+    # filename を渡すと Starlette が Content-Disposition: attachment を付与しダウンロードさせる
+    return FileResponse(
+        file_path,
+        filename=filename,
+        media_type="application/octet-stream",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -243,12 +298,17 @@ def _render_summary_md(result) -> str:
 
     catalog = data.get("catalog_outputs") or {}
     if isinstance(catalog, dict) and catalog:
-        lines += ["", "## 生成されたデータカタログ成果物", ""]
+        from agent.config import config
+
+        base = config.PUBLIC_BASE_URL.rstrip("/")
+        lines += ["", "## 生成されたデータカタログ成果物", "", "次のリンクからダウンロードできます。", ""]
         for table, files in catalog.items():
             lines.append(f"### {table}")
             if isinstance(files, dict):
                 for key, path in files.items():
-                    lines.append(f"- **{key}**: `{path}`")
+                    fname = os.path.basename(str(path))
+                    url = f"{base}/outputs/{quote(str(table))}/{quote(fname)}"
+                    lines.append(f"- **{key}**: [{fname}]({url})")
             else:
                 lines.append(f"- {files}")
 
@@ -280,7 +340,7 @@ async def _mcp_call_analyze_csv(arguments: dict) -> str:
     if questions is not None and not isinstance(questions, list):
         raise ValueError("questions は文字列の配列である必要があります")
 
-    result = await _run_analysis(raw, questions, suffix=".csv")
+    result = await _run_analysis(raw, questions, suffix=".csv", filename=filename)
     return json.dumps(_result_to_jsonable(result), ensure_ascii=False)
 
 
@@ -298,7 +358,7 @@ async def _mcp_call_process_file(arguments: dict) -> str:
         raise ValueError("CSV ファイルのみ対応しています (filename must end with .csv)")
 
     raw = _decode_csv_b64(content_b64)
-    result = await _run_analysis(raw, None, suffix=".csv", model=model)
+    result = await _run_analysis(raw, None, suffix=".csv", filename=filename)
     return _render_summary_md(result)
 
 
