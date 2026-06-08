@@ -17,10 +17,11 @@ class LLMParseError(Exception):
 
 
 class LiteLLMClient(BaseLLM):
-    def __init__(self):
+    def __init__(self, model: str | None = None):
         self.base_url = config.LITELLM_BASE_URL
         self.api_key = config.LITELLM_API_KEY
-        self.model = config.LLM_MODEL
+        # 画面で選択されたモデルがあれば優先。無ければ環境変数(config.LLM_MODEL)。
+        self.model = model or config.LLM_MODEL
 
     async def chat(self, prompt: str) -> LLMResponse:
         logger.info(json.dumps({"event": "llm_request", "prompt_length": len(prompt)}))

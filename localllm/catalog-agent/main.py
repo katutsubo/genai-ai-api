@@ -87,6 +87,10 @@ MCP_TOOLS = [
                     "type": "string",
                     "description": "ファイル本体を base64 エンコードした文字列",
                 },
+                "model": {
+                    "type": "string",
+                    "description": "カタログ生成に使用する LLM モデルID (任意。未指定時はサーバ既定)",
+                },
             },
             "required": ["filename", "content_base64"],
         },
@@ -152,7 +156,7 @@ async def analyze(
     return _result_to_jsonable(result)
 
 
-async def _run_analysis(content: bytes, questions, suffix: str = ".csv"):
+async def _run_analysis(content: bytes, questions, suffix: str = ".csv", model: str | None = None):
     """Write bytes to a temp file, run the orchestrator, and return the AgentResult."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(content)
@@ -161,7 +165,7 @@ async def _run_analysis(content: bytes, questions, suffix: str = ".csv"):
     try:
         from agent.orchestrator import Orchestrator
 
-        orchestrator = Orchestrator()
+        orchestrator = Orchestrator(model=model)
         return await orchestrator.run(tmp_path, questions)
     finally:
         os.unlink(tmp_path)
@@ -283,18 +287,18 @@ async def _mcp_call_analyze_csv(arguments: dict) -> str:
 async def _mcp_call_process_file(arguments: dict) -> str:
     """exapps-proxy mode=mcp_file から呼ばれる。CSV を解析して Markdown サマリを返す。"""
     filename = arguments.get("filename") or "upload.csv"
-    # exapps-proxy は content_base64 を送る。念のため他キーもフォールバックで受ける。
     content_b64 = (
         arguments.get("content_base64")
         or arguments.get("content")
         or arguments.get("file_content")
     )
+    model = arguments.get("model")  # 画面で選択されたモデル（任意）
 
     if not str(filename).endswith(".csv"):
         raise ValueError("CSV ファイルのみ対応しています (filename must end with .csv)")
 
     raw = _decode_csv_b64(content_b64)
-    result = await _run_analysis(raw, None, suffix=".csv")
+    result = await _run_analysis(raw, None, suffix=".csv", model=model)
     return _render_summary_md(result)
 
 

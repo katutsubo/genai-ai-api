@@ -17,8 +17,8 @@ logger = get_logger(__name__)
 
 
 class CatalogGenerator:
-    def __init__(self, llm_client=None):
-        self._meta_gen = MetadataGenerator(llm_client=llm_client)
+    def __init__(self, llm_client=None, model: str | None = None):
+        self._meta_gen = MetadataGenerator(llm_client=llm_client, model=model)
         self._datahub = DatahubExporter()
         self._openmetadata = OpenMetadataExporter()
         self._semantic = SemanticViewGenerator()

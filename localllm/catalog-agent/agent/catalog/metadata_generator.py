@@ -14,8 +14,8 @@ _PROMPT_PATH = os.path.join(os.path.dirname(__file__), "../prompts/metadata_gene
 
 
 class MetadataGenerator:
-    def __init__(self, llm_client=None):
-        self._llm = llm_client or LiteLLMClient()
+    def __init__(self, llm_client=None, model: str | None = None):
+        self._llm = llm_client or LiteLLMClient(model=model)
 
     async def generate(self, parsed: ParsedData) -> TableMetadata:
         table_name = os.path.splitext(os.path.basename(parsed.file_path))[0]

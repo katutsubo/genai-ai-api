@@ -11,14 +11,14 @@ logger = get_logger(__name__)
 
 
 class Orchestrator:
-    def __init__(self, llm_client=None):
+    def __init__(self, llm_client=None, model: str | None = None):
         from agent.catalog.catalog_generator import CatalogGenerator
         from agent.checker.csv_checker import CSVChecker
         from agent.parser.csv_parser import CSVParser
 
         self._parser = CSVParser()
         self._checker = CSVChecker()
-        self._catalog_gen = CatalogGenerator(llm_client=llm_client)
+        self._catalog_gen = CatalogGenerator(llm_client=llm_client, model=model)
 
     async def run(self, file_path: str, questions: list[str] | None = None) -> AgentResult:
         logger.info(f"Orchestrator.run: file={file_path}, questions={questions}")
